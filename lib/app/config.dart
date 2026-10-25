@@ -8,10 +8,10 @@ class AppConfig {
     defaultValue: 'http://10.0.2.2:8080',
   );
 
-  /// CL-04 (open): how long after the last online login an offline login is allowed.
+  /// CL-04 (decided 2026-10-25: 3 days): how long after the last online login an offline login is allowed.
   static const offlineLoginDays = int.fromEnvironment('OFFLINE_LOGIN_DAYS', defaultValue: 3);
 
-  /// CL-07 (open): the session ends after this much inactivity (LG-06).
+  /// CL-07 (decided 2026-10-25: 30 minutes): the session ends after this much inactivity (LG-06).
   static const sessionTimeoutMinutes = int.fromEnvironment('SESSION_TIMEOUT_MINUTES', defaultValue: 30);
 
   static const offlineLoginPeriod = Duration(days: offlineLoginDays);
