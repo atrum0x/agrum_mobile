@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+import '../../../app/agrum_logo.dart';
 import '../../../app/config.dart';
 import '../../../app/theme.dart';
 import '../../../core/connectivity.dart';
@@ -67,10 +68,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   void _forgotPassword() {
-    ShadToaster.of(context).show(const ShadToast(
-      title: Text('Forgot / Change Password'),
-      description: Text(LoginMessages.forgotPassword),
-    ));
+    ShadToaster.of(
+      context,
+    ).show(const ShadToast(title: Text('Forgot / Change Password'), description: Text(LoginMessages.forgotPassword)));
   }
 
   @override
@@ -89,17 +89,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const _Brand(),
+                  _Brand(busy: _busy),
                   const SizedBox(height: 28),
-                  if (!online) ...[
-                    const _OfflineNotice(),
-                    const SizedBox(height: 16),
-                  ],
+                  if (!online) ...[const _OfflineNotice(), const SizedBox(height: 16)],
                   if (_formError != null) ...[
-                    ShadAlert.destructive(
-                      icon: const Icon(LucideIcons.circleAlert),
-                      title: Text(_formError!),
-                    ),
+                    ShadAlert.destructive(icon: const Icon(LucideIcons.circleAlert), title: Text(_formError!)),
                     const SizedBox(height: 16),
                   ],
                   ShadCard(
@@ -182,19 +176,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 }
 
 class _Brand extends StatelessWidget {
-  const _Brand();
+  const _Brand({required this.busy});
+
+  final bool busy;
 
   @override
   Widget build(BuildContext context) {
     final theme = ShadTheme.of(context);
     return Column(
       children: [
-        Container(
-          width: 72,
-          height: 72,
-          decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(20)),
-          child: const Icon(LucideIcons.leaf, color: Colors.white, size: 38),
-        ),
+        AgrumLogo(animated: busy),
         const SizedBox(height: 16),
         Text('Agrum', style: theme.textTheme.h2),
         const SizedBox(height: 4),
@@ -241,9 +232,9 @@ class _FieldLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Text(text, style: ShadTheme.of(context).textTheme.small),
-      );
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Text(text, style: ShadTheme.of(context).textTheme.small),
+  );
 }
 
 class _FieldError extends StatelessWidget {
