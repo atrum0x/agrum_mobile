@@ -8,18 +8,18 @@ UserProfile profile(Set<String> permissions, {bool superuser = false}) =>
 void main() {
   test('both windows granted: Home, Attendance, Weighing (TC-01)', () {
     final tabs = AppTab.visibleFor(profile({'POST:/api/attendance/sync', 'POST:/api/weights/sync'}));
-    expect(tabs, [AppTab.home, AppTab.attendance, AppTab.weighing]);
+    expect(tabs, [AppTab.home, AppTab.attendance, AppTab.weighing, AppTab.more]);
   });
 
   test('only attendance granted: no Weighing tab (TC-03)', () {
-    expect(AppTab.visibleFor(profile({'POST:/api/attendance/sync'})), [AppTab.home, AppTab.attendance]);
+    expect(AppTab.visibleFor(profile({'POST:/api/attendance/sync'})), [AppTab.home, AppTab.attendance, AppTab.more]);
   });
 
   test('only weighing granted: no Attendance tab', () {
-    expect(AppTab.visibleFor(profile({'POST:/api/weights/sync'})), [AppTab.home, AppTab.weighing]);
+    expect(AppTab.visibleFor(profile({'POST:/api/weights/sync'})), [AppTab.home, AppTab.weighing, AppTab.more]);
   });
 
   test('the superuser sees every tab', () {
-    expect(AppTab.visibleFor(profile({}, superuser: true)).length, 3);
+    expect(AppTab.visibleFor(profile({}, superuser: true)).length, 4);
   });
 }
