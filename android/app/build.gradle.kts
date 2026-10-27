@@ -29,7 +29,9 @@ android {
         applicationId = "com.atrum.agrum_mobile"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // CL-07 (decided 2026-10-27): minimum Android 7.0. Pinned so a Flutter upgrade can't raise it
+        // silently; review when the scale (CL-06) is chosen
+        minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
