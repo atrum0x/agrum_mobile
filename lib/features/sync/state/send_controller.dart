@@ -100,8 +100,10 @@ class SendController extends Notifier<SendState> {
   Future<void> sendInBackground() async {
     await reloadCount();
     final auth = ref.read(authControllerProvider);
-    if (!ref.mounted || auth is! LoggedIn || auth.session.offline || state.sending || state.waiting == 0) return;
+    if (!ref.mounted || auth is! LoggedIn || state.sending || state.waiting == 0) return;
     if (!await ref.read(checkOnlineProvider)()) return;
+    // An offline login first logs in online with the password typed at login (LG-07)
+    if (!await ref.read(authControllerProvider.notifier).goOnline()) return;
     await _send(refreshAfter: false);
   }
 
@@ -110,8 +112,10 @@ class SendController extends Notifier<SendState> {
     if (state.sending) return null;
     final auth = ref.read(authControllerProvider);
     if (auth is! LoggedIn) return null;
-    if (auth.session.offline) return _show((message: SendMessages.offlineSession, isError: true));
     if (!await ref.read(checkOnlineProvider)()) return _show((message: SendMessages.noConnection, isError: true));
+    if (!await ref.read(authControllerProvider.notifier).goOnline()) {
+      return _show((message: SendMessages.offlineSession, isError: true));
+    }
     return _send(refreshAfter: true);
   }
 

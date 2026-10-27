@@ -57,7 +57,7 @@ void main() {
     now = DateTime.utc(2026, 10, 25, 6);
     when(() => api.login(any(), any())).thenAnswer((_) async => (accessToken: 'a1', refreshToken: 'r1'));
     when(() => api.me()).thenAnswer((_) async => supervisor);
-    when(() => api.logout(any())).thenAnswer((_) async {});
+    when(() => api.logout(any(), any())).thenAnswer((_) async {});
   });
 
   group('field checks', () {
@@ -96,7 +96,7 @@ void main() {
       await expectLater(repo().login('office1', 'pw'),
           throwsA(isA<LoginException>().having((e) => e.message, 'message', LoginMessages.noAccess)));
       expect(await tokens.accessToken(), isNull);
-      verify(() => api.logout('office1')).called(1);
+      verify(() => api.logout('office1', 'r1')).called(1);
     });
 
     test('falls back to offline login when the server cannot be reached', () async {
@@ -147,6 +147,45 @@ void main() {
     });
   });
 
+  group('offline session going online', () {
+    Future<void> loggedInOffline() async {
+      await repo().login('sup01', 'pw');
+      await repo().logout();
+      online = false;
+      await repo().login('sup01', 'pw');
+      online = true;
+    }
+
+    test('logs in online with the same password and gets tokens', () async {
+      await loggedInOffline();
+      when(() => api.login(any(), any())).thenAnswer((_) async => (accessToken: 'a2', refreshToken: 'r2'));
+
+      final session = await repo().goOnline('sup01', 'pw');
+
+      expect(session!.offline, isFalse);
+      expect(await tokens.accessToken(), 'a2');
+      expect(store.values['session_mode'], 'online');
+    });
+
+    test('server still unreachable: stays offline', () async {
+      await loggedInOffline();
+      when(() => api.login(any(), any()))
+          .thenThrow(const ApiException('Cannot reach the server.', isNetwork: true));
+
+      expect(await repo().goOnline('sup01', 'pw'), isNull);
+      expect(await tokens.accessToken(), isNull);
+      expect(store.values['session_mode'], 'offline');
+    });
+
+    test('the server refuses (password changed, LG-03/LG-04): gives its message', () async {
+      await loggedInOffline();
+      when(() => api.login(any(), any())).thenThrow(const ApiException(LoginMessages.incorrect, status: 401));
+
+      expect(repo().goOnline('sup01', 'pw'),
+          throwsA(isA<LoginException>().having((e) => e.message, 'message', LoginMessages.incorrect)));
+    });
+  });
+
   group('session', () {
     test('logout keeps the offline credential and profile', () async {
       await repo().login('sup01', 'pw');
@@ -155,7 +194,7 @@ void main() {
       expect(await tokens.accessToken(), isNull);
       expect(store.values['offline_credential'], isNotNull);
       expect(store.values['profile'], isNotNull);
-      verify(() => api.logout('sup01')).called(1);
+      verify(() => api.logout('sup01', 'r1')).called(1);
     });
 
     test('logout works offline', () async {
@@ -164,7 +203,7 @@ void main() {
       await repo().logout();
 
       expect(await tokens.accessToken(), isNull);
-      verifyNever(() => api.logout(any()));
+      verifyNever(() => api.logout(any(), any()));
     });
 
     test('restore resumes a recent session', () async {

@@ -145,6 +145,18 @@ class AuthRepository {
     return Session(profile: profile, offline: true);
   }
 
+  /// Turns an offline session into an online one once the server can be reached, with the password
+  /// typed at the offline login. Returns null while the server can't be reached; throws
+  /// [LoginException] when the server refuses (LG-03 password changed, LG-04, LG-05).
+  Future<Session?> goOnline(String username, String password) async {
+    try {
+      return await _loginOnline(username, password);
+    } on ApiException catch (e) {
+      if (e.isNetwork) return null;
+      throw LoginException(e.message);
+    }
+  }
+
   /// Resumes the session after the app was closed, unless it has been idle too long (LG-06).
   Future<Session?> restore(Duration timeout) async {
     final mode = await _store.read(_sessionModeKey);
@@ -185,7 +197,8 @@ class AuthRepository {
 
   Future<void> _revokeQuietly(String username) async {
     try {
-      await _api.logout(username);
+      final refreshToken = await _tokens.refreshToken();
+      if (refreshToken != null) await _api.logout(username, refreshToken);
     } catch (_) {
       // Logging out must work offline; the refresh token then just expires on the server
     }

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/config.dart';
 import '../../../core/api/api_client.dart';
+import '../../../core/connectivity.dart';
 import '../data/auth_repository.dart';
 
 sealed class AuthState {
@@ -35,12 +36,26 @@ class AuthController extends Notifier<AuthState> {
   DateTime _lastActivitySaved = DateTime.fromMillisecondsSinceEpoch(0);
   AppLifecycleListener? _lifecycle;
 
+  /// The password typed at an offline login, kept in memory only (never stored), so the session can
+  /// log in online by itself when the server is reachable again. Gone after an app restart.
+  String? _offlinePassword;
+  Future<bool>? _goingOnline;
+
   AuthRepository get _repo => ref.read(authRepositoryProvider);
 
   @override
   AuthState build() {
     ref.read(sessionExpiryProvider).listener = expire;
-    _lifecycle = AppLifecycleListener(onResume: _checkIdle, onPause: _saveActivity);
+    _lifecycle = AppLifecycleListener(
+      onResume: () {
+        _checkIdle();
+        unawaited(goOnline());
+      },
+      onPause: _saveActivity,
+    );
+    ref.listen(onlineProvider, (previous, next) {
+      if (next.value == true && previous?.value != true) unawaited(goOnline());
+    });
     ref.onDispose(() {
       _idleTimer?.cancel();
       _lifecycle?.dispose();
@@ -61,10 +76,49 @@ class AuthController extends Notifier<AuthState> {
   /// Throws [LoginException] with the message to show.
   Future<void> login(String username, String password) async {
     final session = await _repo.login(username, password);
+    _offlinePassword = session.offline ? password : null;
     _signedIn(session);
   }
 
+  /// An offline session logs in online as soon as it can, so it gets a token to send with (LG-07).
+  /// True when the session is online. Safe to call often: only one attempt runs at a time.
+  Future<bool> goOnline() {
+    final current = state;
+    if (current is! LoggedIn) return Future.value(false);
+    if (!current.session.offline) return Future.value(true);
+    final password = _offlinePassword;
+    if (password == null) return Future.value(false);
+    return _goingOnline ??= _tryGoOnline(current.session.profile.username, password)
+        .whenComplete(() => _goingOnline = null);
+  }
+
+  Future<bool> _tryGoOnline(String username, String password) async {
+    if (!await ref.read(checkOnlineProvider)()) return false;
+    try {
+      final session = await _repo.goOnline(username, password);
+      if (session == null) return false;
+      // Logged out while the call was running: don't bring the session back
+      if (state is! LoggedIn) {
+        await _repo.logout();
+        return false;
+      }
+      _offlinePassword = null;
+      state = LoggedIn(session);
+      return true;
+    } on LoginException catch (e) {
+      // The server is the authority: password changed, person inactive, or no access any more
+      _offlinePassword = null;
+      if (state is LoggedIn) {
+        _idleTimer?.cancel();
+        await _repo.expire();
+        state = LoggedOut(message: e.message);
+      }
+      return false;
+    }
+  }
+
   Future<void> logout() async {
+    _offlinePassword = null;
     _idleTimer?.cancel();
     await _repo.logout();
     state = const LoggedOut();
@@ -73,6 +127,7 @@ class AuthController extends Notifier<AuthState> {
   /// LG-06: inactivity, or the server refused to refresh the session.
   Future<void> expire() async {
     if (state is! LoggedIn) return;
+    _offlinePassword = null;
     _idleTimer?.cancel();
     await _repo.expire();
     state = const LoggedOut(message: LoginMessages.sessionExpired);

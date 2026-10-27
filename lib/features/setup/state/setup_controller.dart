@@ -29,7 +29,9 @@ class SetupController extends Notifier<SetupState> {
   @override
   SetupState build() {
     ref.listen(authControllerProvider, (previous, next) {
-      if (next is LoggedIn && previous is! LoggedIn) unawaited(refresh());
+      final wasOnline = previous is LoggedIn && !previous.session.offline;
+      // A new login, or an offline session that has just logged in online
+      if (next is LoggedIn && !next.session.offline && !wasOnline) unawaited(refresh());
     });
     // Built once Home first shows, which is right after a login or a restored session
     Future.microtask(() async {

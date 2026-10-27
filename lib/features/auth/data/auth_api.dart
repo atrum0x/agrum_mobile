@@ -35,9 +35,10 @@ class AuthApi {
     }
   }
 
-  Future<void> logout(String username) async {
+  /// Ends this phone's session only; the user's web session and other phones stay logged in.
+  Future<void> logout(String username, String refreshToken) async {
     try {
-      await _dio.post<void>('/api/auth/logout/mobile', data: {'username': username});
+      await _dio.post<void>('/api/auth/logout/mobile', data: {'username': username, 'refreshToken': refreshToken});
     } catch (e) {
       throw ApiException.from(e);
     }
