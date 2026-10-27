@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+import '../../../app/theme.dart';
 import '../../auth/state/auth_controller.dart';
 import 'app_shell.dart';
 
@@ -56,6 +57,8 @@ class _WindowButton extends StatelessWidget {
     return ShadButton(
       width: double.infinity,
       height: 112,
+      gradient: AppColors.headerGradient,
+      shadows: AppColors.buttonShadows,
       onPressed: onPressed,
       mainAxisAlignment: MainAxisAlignment.start,
       padding: const EdgeInsets.symmetric(horizontal: 24),

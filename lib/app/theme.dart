@@ -25,6 +25,9 @@ class AppColors {
 
   /// Window header (WindowAppBar): black on the left fading to the primary green on the right.
   static const headerGradient = LinearGradient(colors: [Colors.black, primary]);
+
+  /// Soft green glow under the main (gradient) buttons; primary at 30% alpha.
+  static const buttonShadows = [BoxShadow(color: Color(0x4D1E5631), blurRadius: 10, offset: Offset(0, 4))];
 }
 
 ShadThemeData buildTheme() {

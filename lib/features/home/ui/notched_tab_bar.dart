@@ -5,7 +5,7 @@ import '../../../app/theme.dart';
 import 'app_shell.dart';
 
 /// Bottom tab bar: a white bar with a notch under the selected tab, holding a raised circle in
-/// the header's gradient. The notch and circle slide to the tab that is tapped.
+/// the primary color. The notch and circle slide to the tab that is tapped.
 class NotchedTabBar extends StatelessWidget {
   const NotchedTabBar({super.key, required this.tabs, required this.selected, required this.onSelect});
 
@@ -116,8 +116,8 @@ class _TabItem extends StatelessWidget {
                 child: AnimatedDefaultTextStyle(
                   duration: const Duration(milliseconds: 200),
                   style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
                     color: selected ? AppColors.primary : AppColors.mutedForeground,
                   ),
                   child: Text(tab.label, maxLines: 1),
@@ -145,11 +145,7 @@ class _RaisedCircle extends StatelessWidget {
       height: radius * 2,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Colors.black, AppColors.primary],
-        ),
+        color: AppColors.primary,
         boxShadow: [
           BoxShadow(color: AppColors.primary.withValues(alpha: 0.35), blurRadius: 12, offset: const Offset(0, 4)),
         ],

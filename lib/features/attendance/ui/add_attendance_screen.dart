@@ -10,6 +10,10 @@ import '../data/attendance_row.dart';
 import '../domain/attendance_rules.dart';
 import '../state/attendance_providers.dart';
 
+// Compact type scale for this form
+const _text = TextStyle(fontSize: 14);
+const _muted = TextStyle(fontSize: 13, color: AppColors.mutedForeground);
+
 /// FSD 2.6 steps 2–7: one batch of workers at one site, work type and collection point.
 class AddAttendanceScreen extends ConsumerStatefulWidget {
   const AddAttendanceScreen({super.key});
@@ -147,7 +151,7 @@ class _AddAttendanceScreenState extends ConsumerState<AddAttendanceScreen> {
                 icon: const Icon(LucideIcons.arrowLeft),
                 onPressed: () => context.go('/attendance'),
               ),
-              Text('Add Attendance', style: theme.textTheme.h4),
+              const Text('Add Attendance', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
             ],
           ),
         ),
@@ -162,14 +166,14 @@ class _AddAttendanceScreenState extends ConsumerState<AddAttendanceScreen> {
                     if (_error != null) ...[
                       ShadAlert.destructive(
                         icon: const Icon(LucideIcons.circleAlert),
-                        description: Text(_error!, style: const TextStyle(fontSize: 16)),
+                        description: Text(_error!, style: _text),
                       ),
                       const SizedBox(height: 12),
                     ],
                     if (source.cacheInfo == null)
                       ShadAlert(
                         icon: const Icon(LucideIcons.cloudOff),
-                        description: const Text(AttendanceMessages.noSiteData, style: TextStyle(fontSize: 16)),
+                        description: const Text(AttendanceMessages.noSiteData, style: _text),
                       )
                     else ...[
                       _Field(
@@ -220,13 +224,16 @@ class _AddAttendanceScreenState extends ConsumerState<AddAttendanceScreen> {
                         const Padding(
                           padding: EdgeInsets.only(bottom: 12),
                           child: Text(AttendanceMessages.siteSetup,
-                              style: TextStyle(fontSize: 16, color: AppColors.destructive)),
+                              style: TextStyle(fontSize: 13, color: AppColors.destructive)),
                         ),
                       const SizedBox(height: 4),
-                      Text('Selected workers (${_selected.length})', style: theme.textTheme.large),
+                      Text(
+                        'Selected workers (${_selected.length})',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                      ),
                       const SizedBox(height: 8),
                       if (selectedWorkers.isEmpty)
-                        Text('Tick workers below.', style: theme.textTheme.muted)
+                        const Text('Tick workers below.', style: _muted)
                       else
                         for (final w in selectedWorkers)
                           _SelectedWorker(
@@ -239,8 +246,8 @@ class _AddAttendanceScreenState extends ConsumerState<AddAttendanceScreen> {
                       const SizedBox(height: 16),
                       ShadInput(
                         placeholder: const Text('Search EMP No or name'),
-                        leading: const Icon(LucideIcons.search, size: 20),
-                        style: const TextStyle(fontSize: 16),
+                        leading: const Icon(LucideIcons.search, size: 18, color: AppColors.mutedForeground),
+                        style: _text,
                         onChanged: (v) => setState(() => _search = v),
                       ),
                       const SizedBox(height: 8),
@@ -257,7 +264,7 @@ class _AddAttendanceScreenState extends ConsumerState<AddAttendanceScreen> {
                             padding: const EdgeInsets.all(12),
                             child: Text(
                               term.isEmpty ? 'No more workers to mark today.' : 'No workers match "$_search".',
-                              style: theme.textTheme.muted,
+                              style: _muted,
                             ),
                           ),
                         )
@@ -292,13 +299,15 @@ class _AddAttendanceScreenState extends ConsumerState<AddAttendanceScreen> {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
           child: ShadButton(
-            height: 52,
+            height: 48,
             width: double.infinity,
             enabled: !_saving && source.cacheInfo != null,
+            gradient: AppColors.headerGradient,
+            shadows: AppColors.buttonShadows,
             onPressed: submit,
             child: Text(
               _selected.isEmpty ? 'Submit' : 'Submit (${_selected.length})',
-              style: const TextStyle(fontSize: 18),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, letterSpacing: 0.3),
             ),
           ),
         ),
@@ -320,8 +329,16 @@ class _Field extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0.3,
+              color: AppColors.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: 4),
           child,
         ],
       ),
@@ -358,14 +375,14 @@ class _Select<T> extends StatelessWidget {
           enabled: enabled && options.isNotEmpty,
           minWidth: w,
           maxWidth: w,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          placeholder: Text(placeholder, style: const TextStyle(fontSize: 16)),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          placeholder: Text(placeholder, style: _muted),
           options: [
             for (final entry in options.entries)
-              ShadOption<T>(value: entry.key, child: Text(entry.value, style: const TextStyle(fontSize: 16))),
+              ShadOption<T>(value: entry.key, child: Text(entry.value, style: _text)),
           ],
           selectedOptionBuilder: (context, v) =>
-              Text(options[v] ?? '$v', style: const TextStyle(fontSize: 16), overflow: TextOverflow.ellipsis),
+              Text(options[v] ?? '$v', style: _text, overflow: TextOverflow.ellipsis),
           onChanged: (v) {
             if (v != null) onChanged(v);
           },
@@ -392,13 +409,13 @@ class _SelectedWorker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = ShadTheme.of(context);
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.fromLTRB(12, 6, 0, 6),
       decoration: BoxDecoration(
-        color: AppColors.accent.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(10),
+        color: AppColors.accent.withValues(alpha: 0.35),
+        border: Border.all(color: AppColors.accent),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
@@ -406,10 +423,10 @@ class _SelectedWorker extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(worker.fullName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                Text(worker.fullName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                 Text(
                   otherSite ? '${worker.employeeCode} · Default site ${worker.defaultEstateId}' : worker.employeeCode,
-                  style: theme.textTheme.muted,
+                  style: _muted,
                 ),
               ],
             ),
@@ -418,7 +435,7 @@ class _SelectedWorker extends StatelessWidget {
           _Select<AttendanceCategory>(
             key: ValueKey('cat-${worker.employeeCode}-$category'),
             value: category,
-            width: 136,
+            width: 124,
             placeholder: 'Category',
             options: {for (final c in AttendanceCategory.values) c: c.label},
             onChanged: onCategory,
@@ -426,7 +443,7 @@ class _SelectedWorker extends StatelessWidget {
           IconButton(
             tooltip: 'Remove',
             constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-            icon: const Icon(LucideIcons.x, size: 20),
+            icon: const Icon(LucideIcons.x, size: 18, color: AppColors.mutedForeground),
             onPressed: onRemove,
           ),
         ],
@@ -445,14 +462,13 @@ class _WorkerOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = ShadTheme.of(context);
     final category = AttendanceCategory.fromCode(worker.defaultCategory)?.label;
     final details = [worker.employeeCode, ?category, ?note].join(' · ');
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 56),
+        constraints: const BoxConstraints(minHeight: 52),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           child: Row(
@@ -466,12 +482,12 @@ class _WorkerOption extends StatelessWidget {
                     Text(
                       worker.fullName,
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 14,
                         fontWeight: FontWeight.w500,
                         color: allowed ? AppColors.foreground : AppColors.mutedForeground,
                       ),
                     ),
-                    Text(details, style: theme.textTheme.muted),
+                    Text(details, style: _muted),
                   ],
                 ),
               ),

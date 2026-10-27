@@ -70,6 +70,8 @@ class AttendanceScreen extends ConsumerWidget {
           child: ShadButton(
             height: 52,
             width: double.infinity,
+            gradient: AppColors.headerGradient,
+            shadows: AppColors.buttonShadows,
             leading: const Icon(LucideIcons.userPlus, size: 22),
             onPressed: () => context.go('/attendance/add'),
             child: const Text('Add Attendance', style: TextStyle(fontSize: 18)),
