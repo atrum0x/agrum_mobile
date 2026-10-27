@@ -182,7 +182,7 @@ class _AddAttendanceScreenState extends ConsumerState<AddAttendanceScreen> {
                           key: ValueKey('site-$siteId'),
                           value: siteId,
                           placeholder: 'Select a site',
-                          options: {for (final e in source.estates) e.id: '${e.name} (${e.id})'},
+                          options: {for (final e in source.estates) e.id: '${e.id} – ${e.name}'},
                           onChanged: (v) => setState(() {
                             _siteId = v;
                             _siteChosen = true;
@@ -192,33 +192,44 @@ class _AddAttendanceScreenState extends ConsumerState<AddAttendanceScreen> {
                           }),
                         ),
                       ),
-                      _Field(
-                        label: 'Work Type',
-                        child: _Select<String>(
-                          key: ValueKey('wt-$siteId-$workType'),
-                          value: workType,
-                          enabled: site != null,
-                          placeholder: 'Select a work type',
-                          options: {for (final wt in workTypes) wt.workType: wt.workType},
-                          onChanged: (v) => setState(() => _workType = v),
-                        ),
-                      ),
-                      _Field(
-                        label: 'Collection Point',
-                        child: _Select<String>(
-                          key: ValueKey('cp-$siteId-$cpCode'),
-                          value: cpCode,
-                          enabled: site != null,
-                          placeholder: 'Select a collection point',
-                          options: {
-                            for (final cp in collectionPoints)
-                              cp.cpCode: cp.name == null || cp.name!.isEmpty ? cp.cpCode : '${cp.name} (${cp.cpCode})',
-                          },
-                          onChanged: (v) => setState(() {
-                            _cpCode = v;
-                            _cpChosen = true;
-                          }),
-                        ),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: _Field(
+                              label: 'Work Type',
+                              child: _Select<String>(
+                                key: ValueKey('wt-$siteId-$workType'),
+                                value: workType,
+                                enabled: site != null,
+                                placeholder: 'Select',
+                                options: {for (final wt in workTypes) wt.workType: wt.workType},
+                                onChanged: (v) => setState(() => _workType = v),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _Field(
+                              label: 'Collection Point',
+                              child: _Select<String>(
+                                key: ValueKey('cp-$siteId-$cpCode'),
+                                value: cpCode,
+                                enabled: site != null,
+                                placeholder: 'Select',
+                                options: {
+                                  for (final cp in collectionPoints)
+                                    cp.cpCode:
+                                        cp.name == null || cp.name!.isEmpty ? cp.cpCode : '${cp.cpCode} – ${cp.name}',
+                                },
+                                onChanged: (v) => setState(() {
+                                  _cpCode = v;
+                                  _cpChosen = true;
+                                }),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       if (site != null && lists != null && (workTypes.isEmpty || collectionPoints.isEmpty))
                         const Padding(
@@ -226,59 +237,61 @@ class _AddAttendanceScreenState extends ConsumerState<AddAttendanceScreen> {
                           child: Text(AttendanceMessages.siteSetup,
                               style: TextStyle(fontSize: 13, color: AppColors.destructive)),
                         ),
-                      const SizedBox(height: 4),
+                      _Field(
+                        label: 'Workers present',
+                        child: ShadInput(
+                          placeholder: const Text('Search EMP No or name'),
+                          leading: const Icon(LucideIcons.search, size: 18, color: AppColors.mutedForeground),
+                          style: _text,
+                          onChanged: (v) => setState(() => _search = v),
+                        ),
+                      ),
                       Text(
-                        'Selected workers (${_selected.length})',
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                        _selected.isEmpty ? 'Tick the workers present' : '${_selected.length} selected',
+                        style: _selected.isEmpty
+                            ? _muted
+                            : const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary),
                       ),
-                      const SizedBox(height: 8),
-                      if (selectedWorkers.isEmpty)
-                        const Text('Tick workers below.', style: _muted)
-                      else
-                        for (final w in selectedWorkers)
-                          _SelectedWorker(
-                            worker: w,
-                            category: _selected[w.employeeCode],
-                            otherSite: site != null && isOtherSiteWorker(w, site.id),
-                            onCategory: (c) => setState(() => _selected[w.employeeCode] = c),
-                            onRemove: () => setState(() => _selected.remove(w.employeeCode)),
-                          ),
-                      const SizedBox(height: 16),
-                      ShadInput(
-                        placeholder: const Text('Search EMP No or name'),
-                        leading: const Icon(LucideIcons.search, size: 18, color: AppColors.mutedForeground),
-                        style: _text,
-                        onChanged: (v) => setState(() => _search = v),
-                      ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 4),
                     ],
                   ],
                 ),
               ),
               if (source.cacheInfo != null)
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
-                  sliver: available.isEmpty
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  sliver: selectedWorkers.isEmpty && available.isEmpty
                       ? SliverToBoxAdapter(
                           child: Padding(
-                            padding: const EdgeInsets.all(12),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
                             child: Text(
                               term.isEmpty ? 'No more workers to mark today.' : 'No workers match "$_search".',
                               style: _muted,
                             ),
                           ),
                         )
+                      // Ticked workers stay on top, in tick order, whatever the search
                       : SliverList.builder(
-                          itemCount: available.length,
+                          itemCount: selectedWorkers.length + available.length,
                           itemBuilder: (context, i) {
-                            final w = available[i];
+                            final ticked = i < selectedWorkers.length;
+                            final w = ticked ? selectedWorkers[i] : available[i - selectedWorkers.length];
                             final otherSite = site != null && isOtherSiteWorker(w, site.id);
-                            final allowed = !otherSite || profile.canRecordOtherSite;
-                            return _WorkerOption(
+                            final allowed = ticked || !otherSite || profile.canRecordOtherSite;
+                            return _WorkerRow(
                               worker: w,
+                              ticked: ticked,
+                              category: ticked
+                                  ? _selected[w.employeeCode]
+                                  : AttendanceCategory.fromCode(w.defaultCategory),
                               note: otherSite ? 'Default site ${w.defaultEstateId}' : null,
                               allowed: allowed,
+                              onCategory: (c) => setState(() => _selected[w.employeeCode] = c),
                               onTap: () {
+                                if (ticked) {
+                                  setState(() => _selected.remove(w.employeeCode));
+                                  return;
+                                }
                                 if (!allowed) {
                                   // AT-06
                                   ShadToaster.of(context).show(ShadToast.destructive(
@@ -392,107 +405,109 @@ class _Select<T> extends StatelessWidget {
   }
 }
 
-class _SelectedWorker extends StatelessWidget {
-  const _SelectedWorker({
+/// One worker in the list: tick box, name and EMP No, and the category badge.
+/// On a ticked worker the badge opens a menu to change the category (AT-08).
+class _WorkerRow extends StatelessWidget {
+  const _WorkerRow({
     required this.worker,
+    required this.ticked,
     required this.category,
-    required this.otherSite,
+    required this.note,
+    required this.allowed,
     required this.onCategory,
-    required this.onRemove,
+    required this.onTap,
   });
 
   final CachedWorker worker;
+  final bool ticked;
   final AttendanceCategory? category;
-  final bool otherSite;
+  final String? note;
+  final bool allowed;
   final ValueChanged<AttendanceCategory> onCategory;
-  final VoidCallback onRemove;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.fromLTRB(12, 6, 0, 6),
-      decoration: BoxDecoration(
-        color: AppColors.accent.withValues(alpha: 0.35),
-        border: Border.all(color: AppColors.accent),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(worker.fullName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                Text(
-                  otherSite ? '${worker.employeeCode} · Default site ${worker.defaultEstateId}' : worker.employeeCode,
-                  style: _muted,
-                ),
-              ],
+    final details = [worker.employeeCode, ?note].join(' · ');
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 56),
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.muted))),
+        child: Row(
+          children: [
+            ShadCheckbox(value: ticked, enabled: allowed, onChanged: (_) => onTap()),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    worker.fullName,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: allowed ? AppColors.foreground : AppColors.mutedForeground,
+                    ),
+                  ),
+                  Text(details, style: const TextStyle(fontSize: 12, color: AppColors.mutedForeground)),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          _Select<AttendanceCategory>(
-            key: ValueKey('cat-${worker.employeeCode}-$category'),
-            value: category,
-            width: 124,
-            placeholder: 'Category',
-            options: {for (final c in AttendanceCategory.values) c: c.label},
-            onChanged: onCategory,
-          ),
-          IconButton(
-            tooltip: 'Remove',
-            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-            icon: const Icon(LucideIcons.x, size: 18, color: AppColors.mutedForeground),
-            onPressed: onRemove,
-          ),
-        ],
+            const SizedBox(width: 8),
+            if (ticked)
+              PopupMenuButton<AttendanceCategory>(
+                tooltip: 'Change category',
+                initialValue: category,
+                onSelected: onCategory,
+                itemBuilder: (context) => [
+                  for (final c in AttendanceCategory.values)
+                    PopupMenuItem(value: c, height: 40, child: Text(c.label, style: _text)),
+                ],
+                child: _CategoryBadge(category: category, editable: true),
+              )
+            else if (category != null)
+              _CategoryBadge(category: category, editable: false),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _WorkerOption extends StatelessWidget {
-  const _WorkerOption({required this.worker, required this.note, required this.allowed, required this.onTap});
+/// Small pill with the category; Regular in green, the others in grey, a missing one in red.
+class _CategoryBadge extends StatelessWidget {
+  const _CategoryBadge({required this.category, required this.editable});
 
-  final CachedWorker worker;
-  final String? note;
-  final bool allowed;
-  final VoidCallback onTap;
+  final AttendanceCategory? category;
+  final bool editable;
 
   @override
   Widget build(BuildContext context) {
-    final category = AttendanceCategory.fromCode(worker.defaultCategory)?.label;
-    final details = [worker.employeeCode, ?category, ?note].join(' · ');
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 52),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Row(
-            children: [
-              ShadCheckbox(value: false, enabled: allowed, onChanged: (_) => onTap()),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      worker.fullName,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: allowed ? AppColors.foreground : AppColors.mutedForeground,
-                      ),
-                    ),
-                    Text(details, style: _muted),
-                  ],
-                ),
-              ),
+    final (background, foreground) = switch (category) {
+      null => (AppColors.destructive.withValues(alpha: 0.1), AppColors.destructive),
+      AttendanceCategory.regular => (AppColors.accent, AppColors.primary),
+      _ => (AppColors.muted, AppColors.mutedForeground),
+    };
+    return Container(
+      // Taller tap target than the pill itself
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Container(
+        padding: EdgeInsets.fromLTRB(10, 3, editable ? 6 : 10, 3),
+        decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(999)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              category?.label ?? 'Category',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: foreground),
+            ),
+            if (editable) ...[
+              const SizedBox(width: 2),
+              Icon(LucideIcons.chevronDown, size: 14, color: foreground),
             ],
-          ),
+          ],
         ),
       ),
     );
