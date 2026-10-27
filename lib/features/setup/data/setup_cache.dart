@@ -44,7 +44,13 @@ class SetupCache {
     final db = await _db;
     await db.transaction((txn) async {
       final batch = txn.batch();
-      for (final table in const ['cache_estates', 'cache_work_types', 'cache_collection_points', 'cache_workers']) {
+      for (final table in const [
+        'cache_estates',
+        'cache_work_types',
+        'cache_collection_points',
+        'cache_workers',
+        'cache_weighable',
+      ]) {
         batch.delete(table);
       }
       for (final e in data.estates) {
@@ -58,6 +64,9 @@ class SetupCache {
       }
       for (final w in data.workers) {
         batch.insert('cache_workers', w.toRow());
+      }
+      for (final w in data.weighableToday) {
+        batch.insert('cache_weighable', w.toRow());
       }
       void meta(String key, String? value) => value == null
           ? batch.delete('meta', where: 'key = ?', whereArgs: [key])
@@ -110,6 +119,24 @@ class SetupCache {
     final rows = await (await _db).query('cache_workers',
         where: includeAttended ? null : 'attended_today = 0', orderBy: 'employee_code');
     return rows.map(CachedWorker.fromRow).toList();
+  }
+
+  /// Today's weighable attendance as the server knew it; check [CacheInfo.serverToday] before use.
+  Future<List<CachedWeighable>> weighable() async {
+    final rows = await (await _db).query('cache_weighable', orderBy: 'employee_code');
+    return rows.map(CachedWeighable.fromRow).toList();
+  }
+
+  /// Work types of every cached site.
+  Future<List<CachedWorkType>> allWorkTypes() async {
+    final rows = await (await _db).query('cache_work_types');
+    return rows.map(CachedWorkType.fromRow).toList();
+  }
+
+  /// Collection points of every cached site.
+  Future<List<CachedCollectionPoint>> allCollectionPoints() async {
+    final rows = await (await _db).query('cache_collection_points');
+    return rows.map(CachedCollectionPoint.fromRow).toList();
   }
 }
 

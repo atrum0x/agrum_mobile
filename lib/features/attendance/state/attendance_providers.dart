@@ -8,6 +8,7 @@ import '../../setup/data/setup_cache.dart';
 import '../../setup/data/setup_data.dart';
 import '../../setup/state/setup_controller.dart';
 import '../../sync/state/send_controller.dart';
+import '../../weighing/state/weighing_providers.dart';
 import '../data/attendance_row.dart';
 import '../data/attendance_store.dart';
 import '../domain/attendance_rules.dart';
@@ -112,6 +113,8 @@ class AttendanceRecorder {
     _ref.invalidate(todayAttendanceProvider);
     _ref.invalidate(earlierUnsentAttendanceProvider);
     _ref.invalidate(attendanceFormSourceProvider);
+    // The workers can now be weighed (2.7)
+    _ref.invalidate(weighingSourceProvider);
     // Saved first; sent straight away when there is a connection (2.6 step 6)
     unawaited(_ref.read(sendControllerProvider.notifier).sendInBackground());
   }

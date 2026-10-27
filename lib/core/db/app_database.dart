@@ -6,14 +6,23 @@ import 'package:sqflite/sqflite.dart';
 class AppDatabase {
   const AppDatabase._();
 
-  static const version = 1;
+  static const version = 2;
 
   static Future<Database> open({DatabaseFactory? factory, String? path}) async {
     final dbFactory = factory ?? databaseFactory;
     final dbPath = path ?? p.join(await dbFactory.getDatabasesPath(), 'agrum.db');
     return dbFactory.openDatabase(
       dbPath,
-      options: OpenDatabaseOptions(version: version, onCreate: (db, _) => _createV1(db)),
+      options: OpenDatabaseOptions(
+        version: version,
+        onCreate: (db, _) async {
+          await _createV1(db);
+          await _upgradeToV2(db);
+        },
+        onUpgrade: (db, from, _) async {
+          if (from < 2) await _upgradeToV2(db);
+        },
+      ),
     );
   }
 
@@ -89,6 +98,32 @@ class AppDatabase {
           sync_status TEXT NOT NULL,
           reason TEXT
         )''');
+    await batch.commit(noResult: true);
+  }
+
+  /// The weighing screen (2.7): today's weighable attendance from the server, and the date each
+  /// weighing counts for.
+  static Future<void> _upgradeToV2(Database db) async {
+    final batch = db.batch()
+      ..execute('''
+        CREATE TABLE cache_weighable (
+          attendance_id TEXT PRIMARY KEY,
+          employee_code TEXT NOT NULL,
+          full_name TEXT NOT NULL,
+          estate_id TEXT NOT NULL,
+          estate_name TEXT NOT NULL,
+          cp_code TEXT NOT NULL,
+          cp_name TEXT,
+          work_type TEXT NOT NULL,
+          variance_percent REAL NOT NULL,
+          entries_today INTEGER NOT NULL,
+          daily_limit INTEGER NOT NULL,
+          last_sequence INTEGER NOT NULL
+        )''')
+      // = the attendance date, yyyy-MM-dd
+      ..execute('ALTER TABLE weight_rows ADD COLUMN weigh_date TEXT')
+      ..execute('ALTER TABLE weight_rows ADD COLUMN cp_code TEXT')
+      ..execute('ALTER TABLE weight_rows ADD COLUMN work_type TEXT');
     await batch.commit(noResult: true);
   }
 }

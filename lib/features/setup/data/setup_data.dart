@@ -8,6 +8,7 @@ class SetupData {
     required this.workTypes,
     required this.collectionPoints,
     required this.workers,
+    this.weighableToday = const [],
   });
 
   /// The server's date, yyyy-MM-dd.
@@ -18,6 +19,9 @@ class SetupData {
   final List<CachedWorkType> workTypes;
   final List<CachedCollectionPoint> collectionPoints;
   final List<CachedWorker> workers;
+
+  /// Today's attendance the server knows of that can be weighed (2.7).
+  final List<CachedWeighable> weighableToday;
 
   factory SetupData.fromJson(Map<String, dynamic> json) {
     final attended = {...((json['attendedToday'] as List?) ?? const []).cast<String>()};
@@ -32,6 +36,7 @@ class SetupData {
       workers: list('workers')
           .map((w) => CachedWorker.fromJson(w, attendedToday: attended.contains(w['employeeCode'])))
           .toList(),
+      weighableToday: list('weighableToday').map(CachedWeighable.fromJson).toList(),
     );
   }
 }
@@ -192,5 +197,86 @@ class CachedWorker {
         'default_cp_code': defaultCpCode,
         'default_category': defaultCategory,
         'attended_today': attendedToday ? 1 : 0,
+      };
+}
+
+/// A worker with attendance today at one of the user's sites and a weighing-required work type, as
+/// the server knew at the last refresh (GET /api/mobile/setup `weighableToday`).
+class CachedWeighable {
+  const CachedWeighable({
+    required this.attendanceId,
+    required this.employeeCode,
+    required this.fullName,
+    required this.estateId,
+    required this.estateName,
+    required this.cpCode,
+    this.cpName,
+    required this.workType,
+    required this.variancePercent,
+    required this.entriesToday,
+    required this.dailyLimit,
+    required this.lastSequence,
+  });
+
+  final String attendanceId;
+  final String employeeCode;
+  final String fullName;
+  final String estateId;
+  final String estateName;
+  final String cpCode;
+  final String? cpName;
+  final String workType;
+  final double variancePercent;
+
+  /// Not counting cancelled weighings (WE-04).
+  final int entriesToday;
+  final int dailyLimit;
+
+  /// Highest entry number so far, cancelled included.
+  final int lastSequence;
+
+  factory CachedWeighable.fromJson(Map<String, dynamic> json) => CachedWeighable(
+        attendanceId: json['attendanceId'] as String,
+        employeeCode: json['employeeCode'] as String,
+        fullName: json['fullName'] as String,
+        estateId: json['estateId'] as String,
+        estateName: json['estateName'] as String,
+        cpCode: json['cpCode'] as String,
+        cpName: json['cpName'] as String?,
+        workType: json['workType'] as String,
+        variancePercent: _decimal(json['variancePercent']) ?? 0,
+        entriesToday: json['entriesToday'] as int,
+        dailyLimit: json['dailyLimit'] as int,
+        lastSequence: json['lastSequence'] as int,
+      );
+
+  factory CachedWeighable.fromRow(Map<String, Object?> row) => CachedWeighable(
+        attendanceId: row['attendance_id'] as String,
+        employeeCode: row['employee_code'] as String,
+        fullName: row['full_name'] as String,
+        estateId: row['estate_id'] as String,
+        estateName: row['estate_name'] as String,
+        cpCode: row['cp_code'] as String,
+        cpName: row['cp_name'] as String?,
+        workType: row['work_type'] as String,
+        variancePercent: (row['variance_percent'] as num).toDouble(),
+        entriesToday: row['entries_today'] as int,
+        dailyLimit: row['daily_limit'] as int,
+        lastSequence: row['last_sequence'] as int,
+      );
+
+  Map<String, Object?> toRow() => {
+        'attendance_id': attendanceId,
+        'employee_code': employeeCode,
+        'full_name': fullName,
+        'estate_id': estateId,
+        'estate_name': estateName,
+        'cp_code': cpCode,
+        'cp_name': cpName,
+        'work_type': workType,
+        'variance_percent': variancePercent,
+        'entries_today': entriesToday,
+        'daily_limit': dailyLimit,
+        'last_sequence': lastSequence,
       };
 }
