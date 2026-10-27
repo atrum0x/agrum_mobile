@@ -22,6 +22,10 @@ class TokenStore {
     await _store.write(_refresh, refreshToken);
   }
 
+  /// Ends the session's use of the server but keeps the refresh token, so the same user can
+  /// reconnect after logging in again offline (LG-06 idle timeout).
+  Future<void> clearAccessToken() => _store.delete(_access);
+
   Future<void> clear() async {
     await _store.delete(_access);
     await _store.delete(_refresh);

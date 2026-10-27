@@ -80,22 +80,23 @@ class AuthController extends Notifier<AuthState> {
     _signedIn(session);
   }
 
-  /// An offline session logs in online as soon as it can, so it gets a token to send with (LG-07).
-  /// True when the session is online. Safe to call often: only one attempt runs at a time.
+  /// An offline session gets online as soon as it can, so it has a token to send with (LG-07): first
+  /// with the refresh token kept from the user's last online session (also after an app restart),
+  /// else with the password typed at the offline login. True when the session is online. Safe to
+  /// call often: only one attempt runs at a time.
   Future<bool> goOnline() {
     final current = state;
     if (current is! LoggedIn) return Future.value(false);
     if (!current.session.offline) return Future.value(true);
-    final password = _offlinePassword;
-    if (password == null) return Future.value(false);
-    return _goingOnline ??= _tryGoOnline(current.session.profile.username, password)
+    return _goingOnline ??= _tryGoOnline(current.session.profile.username, _offlinePassword)
         .whenComplete(() => _goingOnline = null);
   }
 
-  Future<bool> _tryGoOnline(String username, String password) async {
+  Future<bool> _tryGoOnline(String username, String? password) async {
     if (!await ref.read(checkOnlineProvider)()) return false;
     try {
-      final session = await _repo.goOnline(username, password);
+      var session = await _repo.resumeWithRefreshToken(username);
+      if (session == null && password != null) session = await _repo.goOnline(username, password);
       if (session == null) return false;
       // Logged out while the call was running: don't bring the session back
       if (state is! LoggedIn) {
@@ -124,12 +125,17 @@ class AuthController extends Notifier<AuthState> {
     state = const LoggedOut();
   }
 
-  /// LG-06: inactivity, or the server refused to refresh the session.
-  Future<void> expire() async {
+  /// LG-06: the server refused to refresh the session.
+  Future<void> expire() => _expire(keepRefreshToken: false);
+
+  /// LG-06 after inactivity: the refresh token is kept for the next login on this phone.
+  Future<void> _expireIdle() => _expire(keepRefreshToken: true);
+
+  Future<void> _expire({required bool keepRefreshToken}) async {
     if (state is! LoggedIn) return;
     _offlinePassword = null;
     _idleTimer?.cancel();
-    await _repo.expire();
+    await _repo.expire(keepRefreshToken: keepRefreshToken);
     state = const LoggedOut(message: LoginMessages.sessionExpired);
   }
 
@@ -150,12 +156,12 @@ class AuthController extends Notifier<AuthState> {
 
   void _restartIdleTimer() {
     _idleTimer?.cancel();
-    _idleTimer = Timer(AppConfig.sessionTimeout, expire);
+    _idleTimer = Timer(AppConfig.sessionTimeout, _expireIdle);
   }
 
   // Timers don't run while the app is in the background
   void _checkIdle() {
-    if (state is LoggedIn && DateTime.now().difference(_lastActivity) >= AppConfig.sessionTimeout) expire();
+    if (state is LoggedIn && DateTime.now().difference(_lastActivity) >= AppConfig.sessionTimeout) _expireIdle();
   }
 
   void _saveActivity() {

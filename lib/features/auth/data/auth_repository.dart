@@ -157,6 +157,44 @@ class AuthRepository {
     }
   }
 
+  /// Reconnects an offline session with the refresh token kept from this user's last online session
+  /// on this phone (an idle timeout keeps it; Logout does not). Works after the app was closed, and
+  /// needs no password. Null when there is no usable token or the server can't be reached.
+  Future<Session?> resumeWithRefreshToken(String username) async {
+    final tokenUser = await _tokens.username();
+    final refreshToken = await _tokens.refreshToken();
+    if (tokenUser == null || refreshToken == null || tokenUser.toLowerCase() != username.toLowerCase()) {
+      return null;
+    }
+    try {
+      final tokens = await _api.refresh(tokenUser, refreshToken);
+      await _tokens.save(username: tokenUser, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken);
+    } on ApiException catch (e) {
+      if (e.isNetwork) return null;
+      // Expired, revoked (a password change or Logout elsewhere ends every session) or refused:
+      // the token is of no use any more
+      await _tokens.clear();
+      return null;
+    }
+
+    final UserProfile profile;
+    try {
+      profile = await _api.me();
+    } on ApiException catch (e) {
+      if (e.isNetwork) return null;
+      await _tokens.clear();
+      return null;
+    }
+    // LG-05: the phone's windows are Attendance and Enter Weight
+    if (!profile.hasMobileAccess) {
+      await _revokeQuietly(profile.username);
+      throw const LoginException(LoginMessages.noAccess);
+    }
+    await _store.write(_profileKey, jsonEncode(profile.toJson()));
+    await _startSession(offline: false);
+    return Session(profile: profile, offline: false);
+  }
+
   /// Resumes the session after the app was closed, unless it has been idle too long (LG-06).
   Future<Session?> restore(Duration timeout) async {
     final mode = await _store.read(_sessionModeKey);
@@ -164,7 +202,7 @@ class AuthRepository {
     final lastActivity = DateTime.tryParse(await _store.read(_lastActivityKey) ?? '');
     if (mode == null || profile == null) return null;
     if (lastActivity == null || _clock().toUtc().difference(lastActivity) >= timeout) {
-      await expire();
+      await expire(keepRefreshToken: true);
       return null;
     }
     final offline = mode == 'offline';
@@ -178,10 +216,16 @@ class AuthRepository {
 
   Future<void> recordActivity() => _store.write(_lastActivityKey, _clock().toUtc().toIso8601String());
 
-  /// LG-06. Records saved on the phone are kept and sent after the next login.
-  Future<void> expire() async {
+  /// LG-06. Records saved on the phone are kept and sent after the next login. After inactivity
+  /// ([keepRefreshToken]) the refresh token stays, so the same user can reconnect after logging in
+  /// again offline; when the server refused the session it is dropped.
+  Future<void> expire({bool keepRefreshToken = false}) async {
     await _store.delete(_sessionModeKey);
-    await _tokens.clear();
+    if (keepRefreshToken) {
+      await _tokens.clearAccessToken();
+    } else {
+      await _tokens.clear();
+    }
   }
 
   /// Keeps the offline credential, the cached profile and every unsent record.

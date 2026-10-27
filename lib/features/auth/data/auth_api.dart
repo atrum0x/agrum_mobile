@@ -26,6 +26,20 @@ class AuthApi {
     }
   }
 
+  /// A new token pair for this phone's session; the refresh token rotates every time.
+  Future<LoginTokens> refresh(String username, String refreshToken) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/api/auth/refresh/mobile',
+        data: {'username': username, 'refreshToken': refreshToken},
+      );
+      final body = response.data!;
+      return (accessToken: body['accessToken'] as String, refreshToken: body['refreshToken'] as String);
+    } catch (e) {
+      throw ApiException.from(e);
+    }
+  }
+
   Future<UserProfile> me() async {
     try {
       final response = await _dio.get<Map<String, dynamic>>('/api/auth/me/mobile');

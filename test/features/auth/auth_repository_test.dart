@@ -147,6 +147,95 @@ void main() {
     });
   });
 
+  group('reconnecting with the kept refresh token', () {
+    // Online login, then the session timed out (LG-06), then the same user logged in again offline
+    Future<void> timedOutThenOffline() async {
+      await repo().login('sup01', 'pw');
+      await repo().expire(keepRefreshToken: true);
+      online = false;
+      await repo().login('sup01', 'pw');
+      online = true;
+    }
+
+    test('an idle timeout keeps only the refresh token', () async {
+      await repo().login('sup01', 'pw');
+      await repo().expire(keepRefreshToken: true);
+
+      expect(await tokens.accessToken(), isNull);
+      expect(await tokens.refreshToken(), 'r1');
+      expect(store.values['session_mode'], isNull);
+    });
+
+    test('a server-refused session drops the refresh token too', () async {
+      await repo().login('sup01', 'pw');
+      await repo().expire();
+
+      expect(await tokens.refreshToken(), isNull);
+    });
+
+    test('gets online without the password, e.g. after the app was closed', () async {
+      await timedOutThenOffline();
+      when(() => api.refresh('sup01', 'r1')).thenAnswer((_) async => (accessToken: 'a2', refreshToken: 'r2'));
+
+      final session = await repo().resumeWithRefreshToken('SUP01');
+
+      expect(session!.offline, isFalse);
+      expect(await tokens.accessToken(), 'a2');
+      expect(await tokens.refreshToken(), 'r2');
+      expect(store.values['session_mode'], 'online');
+      // Only the first, online login of the setup; no password was needed to reconnect
+      verify(() => api.login(any(), any())).called(1);
+    });
+
+    test('server still unreachable: stays offline and keeps the token', () async {
+      await timedOutThenOffline();
+      when(() => api.refresh(any(), any()))
+          .thenThrow(const ApiException('Cannot reach the server.', isNetwork: true));
+
+      expect(await repo().resumeWithRefreshToken('sup01'), isNull);
+      expect(await tokens.refreshToken(), 'r1');
+    });
+
+    test('a refused token (expired, revoked, password changed) is dropped', () async {
+      await timedOutThenOffline();
+      when(() => api.refresh(any(), any())).thenThrow(const ApiException(
+          'Refresh token expired, invalid, or revoked. Please log in again.', status: 401));
+
+      expect(await repo().resumeWithRefreshToken('sup01'), isNull);
+      expect(await tokens.refreshToken(), isNull);
+      expect(store.values['session_mode'], 'offline');
+    });
+
+    test('LG-05: no phone windows any more ends the session', () async {
+      await timedOutThenOffline();
+      when(() => api.refresh(any(), any())).thenAnswer((_) async => (accessToken: 'a2', refreshToken: 'r2'));
+      when(() => api.me()).thenAnswer((_) async => const UserProfile(
+          username: 'sup01', employeeName: null, superuser: false, permissions: {}));
+
+      expect(repo().resumeWithRefreshToken('sup01'),
+          throwsA(isA<LoginException>().having((e) => e.message, 'message', LoginMessages.noAccess)));
+    });
+
+    test('no token after Logout, or one for another user: nothing to resume with', () async {
+      await repo().login('sup01', 'pw');
+      await repo().logout();
+      expect(await repo().resumeWithRefreshToken('sup01'), isNull);
+
+      await repo().login('sup01', 'pw');
+      await repo().expire(keepRefreshToken: true);
+      expect(await repo().resumeWithRefreshToken('sup02'), isNull);
+      verifyNever(() => api.refresh(any(), any()));
+    });
+
+    test('TC-06 restore after the inactivity timeout keeps the refresh token', () async {
+      await repo().login('sup01', 'pw');
+      now = now.add(const Duration(minutes: 30));
+
+      expect(await repo().restore(const Duration(minutes: 30)), isNull);
+      expect(await tokens.refreshToken(), 'r1');
+    });
+  });
+
   group('offline session going online', () {
     Future<void> loggedInOffline() async {
       await repo().login('sup01', 'pw');
