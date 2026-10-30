@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -29,6 +31,9 @@ class WeightSyncApi {
               'entryType': r.entryType.code,
               'variancePercent': r.variancePercent,
               'provisionalSequence': r.provisionalSequence,
+              if (r.identifiedBy != null) 'identifiedBy': r.identifiedBy!.code,
+              if (r.faceSimilarity != null) 'faceSimilarity': r.faceSimilarity,
+              if (r.photo != null) 'photo': base64Encode(r.photo!),
             },
         ],
       });

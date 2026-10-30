@@ -7,6 +7,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../../app/theme.dart';
 import '../data/face_camera_service.dart';
+import '../data/face_recognizer.dart';
 import '../domain/face_quality.dart';
 import '../state/face_providers.dart';
 import 'face_camera_view.dart';
@@ -21,15 +22,16 @@ String faceCheckError(Object error) => 'Face check failed: $error';
 
 /// Identifies a worker by face from the live camera.
 ///
-/// [onRecognised] gets the matched EMP No and returns null to accept it (the parent then removes the
-/// scanner), or a message to show before scanning again, e.g. when the worker isn't on today's list.
+/// [onRecognised] gets the match (EMP No, score and the face photo) and returns null to accept it (the
+/// parent then removes the scanner), or a message to show before scanning again, e.g. when the worker
+/// isn't on today's list.
 ///
 /// The camera runs only while this widget is on screen: an inactive tab or a covered route mutes
 /// [TickerMode], which closes the camera.
 class FaceScanner extends ConsumerStatefulWidget {
   const FaceScanner({super.key, required this.onRecognised});
 
-  final String? Function(String employeeCode) onRecognised;
+  final String? Function(FaceMatch match) onRecognised;
 
   @override
   ConsumerState<FaceScanner> createState() => _FaceScannerState();
@@ -152,7 +154,7 @@ class _FaceScannerState extends ConsumerState<FaceScanner> {
         );
     if (!mounted || _camera == null) return;
     if (match.success) {
-      final problem = widget.onRecognised(match.employeeCode!);
+      final problem = widget.onRecognised(match);
       if (problem == null) return;
       _fail(problem);
     } else {

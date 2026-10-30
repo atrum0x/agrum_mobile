@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -68,6 +69,9 @@ class WeightRecorder {
     required WeighableWorker worker,
     required double weightKg,
     required EntryType entryType,
+    IdentifiedBy? identifiedBy,
+    double? faceSimilarity,
+    Uint8List? photo,
     DateTime? now,
   }) async {
     final auth = _ref.read(authControllerProvider);
@@ -88,6 +92,9 @@ class WeightRecorder {
       variancePercent: worker.variancePercent,
       provisionalSequence: worker.nextSequence,
       recordedBy: auth.session.profile.username,
+      identifiedBy: identifiedBy,
+      faceSimilarity: faceSimilarity,
+      photo: photo,
     );
     await _ref.read(weightStoreProvider).save(row);
     _ref.invalidate(weighingSourceProvider);

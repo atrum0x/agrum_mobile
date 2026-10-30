@@ -6,6 +6,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import '../../../app/theme.dart';
 import '../../../shared/widgets/sync_status_badge.dart';
 import '../../auth/state/auth_controller.dart';
+import '../../face/data/face_recognizer.dart';
 import '../../face/state/face_providers.dart';
 import '../../face/ui/face_scanner.dart';
 import '../../sync/data/sync_status.dart';
@@ -42,6 +43,9 @@ class _WeighingScreenState extends ConsumerState<WeighingScreen> {
 
   /// Picking the worker by search instead of by face.
   bool _searchMode = false;
+
+  /// The face match that picked the worker; null when picked by search.
+  FaceMatch? _faceMatch;
   EntryType? _entryType;
   String? _error;
   bool _saving = false;
@@ -59,6 +63,7 @@ class _WeighingScreenState extends ConsumerState<WeighingScreen> {
 
   void _clear() {
     _attendanceId = null;
+    _faceMatch = null;
     _search = '';
     _searchMode = false;
     _entryType = null;
@@ -82,11 +87,13 @@ class _WeighingScreenState extends ConsumerState<WeighingScreen> {
     final faces = ref.watch(registeredFacesProvider);
 
     // A face match picks the worker, if they can be weighed today
-    String? pickByFace(String employeeCode) {
+    String? pickByFace(FaceMatch face) {
+      final employeeCode = face.employeeCode!;
       final match = source.workers.where((w) => w.employeeCode == employeeCode).firstOrNull;
       if (match == null) return "$employeeCode is not on today's weighing list.";
       setState(() {
         _attendanceId = match.attendanceId;
+        _faceMatch = face;
         _error = null;
       });
       return null;
@@ -111,6 +118,9 @@ class _WeighingScreenState extends ConsumerState<WeighingScreen> {
               worker: worker!,
               weightKg: parseWeight(_weightController.text)!,
               entryType: _entryType!,
+              identifiedBy: _faceMatch == null ? IdentifiedBy.search : IdentifiedBy.face,
+              faceSimilarity: _faceMatch?.similarity,
+              photo: _faceMatch?.photo,
               now: now,
             );
         if (!mounted || row == null) return;
@@ -162,6 +172,7 @@ class _WeighingScreenState extends ConsumerState<WeighingScreen> {
                   onSearch: (v) => setState(() => _search = v),
                   onPick: (w) => setState(() {
                     _attendanceId = w.attendanceId;
+                    _faceMatch = null;
                     _error = null;
                   }),
                 ),

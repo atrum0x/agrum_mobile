@@ -246,6 +246,7 @@ FaceQualityResult? evaluateFaceQuality(
       isGood: false,
       message: pictureProblem,
       boundingBox: face.boundingBox,
+      face: face,
     );
   }
 

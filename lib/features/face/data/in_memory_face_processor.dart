@@ -6,6 +6,19 @@ import 'package:image/image.dart' as img;
 import 'face_preprocessor.dart';
 
 class InMemoryFaceProcessor {
+  /// The model input for a frame, plus the face as a small JPEG for the weighing record.
+  static ({Float32List tensor, Uint8List photo}) processFrame({
+    required CameraImage image,
+    required Face face,
+    required int sensorOrientation,
+  }) {
+    final upright = _uprightFrame(image, sensorOrientation);
+    return (
+      tensor: _toTensor(upright, face, 112, 112),
+      photo: FacePreprocessor.facePhotoJpeg(upright, face.boundingBox),
+    );
+  }
+
   /// Converts a [CameraImage] frame directly to a normalized FaceNet Float32 tensor.
   static Float32List processFrameToTensor({
     required CameraImage image,
@@ -13,16 +26,20 @@ class InMemoryFaceProcessor {
     required int sensorOrientation,
     int targetWidth = 112,
     int targetHeight = 112,
-  }) {
-    img.Image? rgbImage = _convertCameraImageToRgb(image);
+  }) =>
+      _toTensor(_uprightFrame(image, sensorOrientation), face, targetWidth, targetHeight);
+
+  static img.Image _uprightFrame(CameraImage image, int sensorOrientation) {
+    final rgbImage = _convertCameraImageToRgb(image);
     if (rgbImage == null) {
       throw Exception('Unsupported camera image format: ${image.format.group}');
     }
 
     // 1. Rotate raw camera frame to match portrait sensor orientation
-    if (sensorOrientation != 0) {
-      rgbImage = img.copyRotate(rgbImage, angle: sensorOrientation.toDouble());
-    }
+    return sensorOrientation == 0 ? rgbImage : img.copyRotate(rgbImage, angle: sensorOrientation.toDouble());
+  }
+
+  static Float32List _toTensor(img.Image rgbImage, Face face, int targetWidth, int targetHeight) {
 
     // No mirroring for the front camera: ML Kit's face box and landmarks are for the unmirrored
     // frame, and registration photos aren't mirrored either.

@@ -6,7 +6,7 @@ import 'package:sqflite/sqflite.dart';
 class AppDatabase {
   const AppDatabase._();
 
-  static const version = 3;
+  static const version = 4;
 
   static Future<Database> open({DatabaseFactory? factory, String? path}) async {
     final dbFactory = factory ?? databaseFactory;
@@ -19,10 +19,12 @@ class AppDatabase {
           await _createV1(db);
           await _upgradeToV2(db);
           await _upgradeToV3(db);
+          await _upgradeToV4(db);
         },
         onUpgrade: (db, from, _) async {
           if (from < 2) await _upgradeToV2(db);
           if (from < 3) await _upgradeToV3(db);
+          if (from < 4) await _upgradeToV4(db);
         },
       ),
     );
@@ -142,6 +144,17 @@ class AppDatabase {
         sync_status TEXT NOT NULL,
         reason TEXT
       )''');
+  }
+
+  /// Face photos and how the worker was picked. A photo is kept only until the server has it.
+  static Future<void> _upgradeToV4(Database db) async {
+    final batch = db.batch()
+      // FACE or SEARCH; null for weighings saved before this
+      ..execute('ALTER TABLE weight_rows ADD COLUMN identified_by TEXT')
+      ..execute('ALTER TABLE weight_rows ADD COLUMN face_similarity REAL')
+      ..execute('ALTER TABLE weight_rows ADD COLUMN photo BLOB')
+      ..execute('ALTER TABLE face_templates ADD COLUMN photo BLOB');
+    await batch.commit(noResult: true);
   }
 }
 

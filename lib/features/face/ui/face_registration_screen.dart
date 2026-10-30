@@ -263,7 +263,8 @@ class _PoseCaptureState extends ConsumerState<_PoseCapture> {
           outputPath: file.path,
           quality: 85,
         );
-        await _recognizer.registerSample(employeeCode: _code, imagePath: file.path);
+        // The first pose (looking straight ahead) gives the photo shown next to weighing photos
+        await _recognizer.registerSample(employeeCode: _code, imagePath: file.path, keepPhoto: _poseIndex == 0);
       } finally {
         if (await file.exists()) await file.delete();
       }
@@ -311,6 +312,7 @@ class _PoseCaptureState extends ConsumerState<_PoseCapture> {
           registeredAt: DateTime.now(),
           registeredBy: auth.session.profile.username,
           status: SyncStatus.waiting,
+          photo: face.photo,
         ));
     ref.invalidate(faceTemplatesProvider);
     unawaited(ref.read(sendControllerProvider.notifier).sendInBackground());

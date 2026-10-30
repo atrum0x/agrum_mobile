@@ -13,6 +13,7 @@ class FaceTemplateRow {
     required this.registeredBy,
     required this.status,
     this.reason,
+    this.photo,
   });
 
   /// The model the phone runs; the server keeps it so templates from another model are never mixed.
@@ -26,6 +27,9 @@ class FaceTemplateRow {
   final String registeredBy;
   final SyncStatus status;
   final String? reason;
+
+  /// The face as a small JPEG, until it has been sent; not part of the download.
+  final Uint8List? photo;
 
   /// 512 float32 values, little-endian: the BLOB on the phone and, as base64, the server's format.
   static Uint8List encode(List<double> embedding) {
@@ -49,6 +53,7 @@ class FaceTemplateRow {
         'registered_by': registeredBy,
         'sync_status': status.code,
         'reason': reason,
+        'photo': photo,
       };
 
   factory FaceTemplateRow.fromRow(Map<String, Object?> row) => FaceTemplateRow(
@@ -59,6 +64,7 @@ class FaceTemplateRow {
         registeredBy: row['registered_by']! as String,
         status: SyncStatus.fromCode(row['sync_status']! as String),
         reason: row['reason'] as String?,
+        photo: row['photo'] as Uint8List?,
       );
 
   /// What POST /api/face-templates/sync takes.
@@ -68,6 +74,7 @@ class FaceTemplateRow {
         'embedding': base64Encode(encode(embedding)),
         'sampleCount': sampleCount,
         'registeredAt': registeredAt.toUtc().toIso8601String(),
+        if (photo != null) 'photo': base64Encode(photo!),
       };
 
   /// From GET /api/face-templates; null when it isn't usable here (another model or size).

@@ -62,6 +62,8 @@ class WeightStore {
             'sync_status': r.status.code,
             'reason': r.status == SyncStatus.rejected ? r.reason : null,
             if (r.entrySequence != null) 'final_sequence': r.entrySequence,
+            // The server has the photo now
+            if (r.status == SyncStatus.sent) 'photo': null,
           },
           where: 'weight_id = ? AND sync_status = ?',
           whereArgs: [r.id, SyncStatus.waiting.code],

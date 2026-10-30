@@ -13,6 +13,7 @@ import 'package:agrum_mobile/features/face/data/face_template_row.dart';
 import 'package:agrum_mobile/features/face/data/in_memory_face_processor.dart';
 import 'package:agrum_mobile/features/sync/data/sync_engine.dart';
 import 'package:agrum_mobile/features/sync/data/sync_status.dart';
+import 'package:agrum_mobile/features/weighing/data/weight_row.dart';
 import 'package:agrum_mobile/features/weighing/data/weight_store.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -296,5 +297,76 @@ void main() {
     expect(tensor.length, 112 * 112 * 3);
     // Mid grey stays near 0 after the [-1, 1] scaling
     expect(tensor.every((v) => v.abs() < 0.05), isTrue);
+  });
+
+  group('photos', () {
+    test('the face photo is a small JPEG around the face', () {
+      final frame = img.Image(width: 480, height: 640)..clear(img.ColorRgb8(120, 120, 120));
+      final jpeg = FacePreprocessor.facePhotoJpeg(frame, const Rect.fromLTWH(140, 200, 200, 220));
+      expect(jpeg.sublist(0, 2), [0xFF, 0xD8]);
+      final decoded = img.decodeJpg(jpeg)!;
+      expect(decoded.width, 240);
+      expect(decoded.height, 240);
+    });
+
+    test('photos are sent with the record and dropped from the phone once the server has them', () async {
+      final db = await AppDatabase.open(factory: databaseFactoryFfi, path: inMemoryDatabasePath);
+      addTearDown(db.close);
+      final api = FakeAttendanceApi();
+      final weights = WeightStore(Future.value(db));
+      final faces = FaceStore(Future.value(db));
+      final engine = SyncEngine(
+        attendance: AttendanceStore(Future.value(db)),
+        attendanceApi: api,
+        weights: weights,
+        weightApi: FakeWeightApi(api.order),
+        faces: faces,
+        faceApi: FakeFaceApi(api.order),
+      );
+      final photo = Uint8List.fromList([0xFF, 0xD8, 1, 2]);
+      final w = weighing('w1');
+      await weights.save(WeightRow(
+        weightId: w.weightId,
+        attendanceId: w.attendanceId,
+        employeeCode: w.employeeCode,
+        fullName: w.fullName,
+        estateId: w.estateId,
+        cpCode: w.cpCode,
+        workType: w.workType,
+        weighDate: w.weighDate,
+        weighedAt: w.weighedAt,
+        weightKg: w.weightKg,
+        entryType: w.entryType,
+        variancePercent: w.variancePercent,
+        provisionalSequence: w.provisionalSequence,
+        recordedBy: w.recordedBy,
+        identifiedBy: IdentifiedBy.face,
+        faceSimilarity: 0.81,
+        photo: photo,
+      ));
+      final f = face('E001');
+      await faces.save(FaceTemplateRow(
+        employeeCode: f.employeeCode,
+        embedding: f.embedding,
+        sampleCount: f.sampleCount,
+        registeredAt: f.registeredAt,
+        registeredBy: f.registeredBy,
+        status: SyncStatus.waiting,
+        photo: photo,
+      ));
+      expect((await weights.forDate('sup01', '2026-10-24')).single.photo, photo);
+      expect(f.toJson().containsKey('photo'), isFalse);
+
+      await engine.run('sup01');
+
+      final sent = (await weights.forDate('sup01', '2026-10-24')).single;
+      expect(sent.status, SyncStatus.sent);
+      expect(sent.identifiedBy, IdentifiedBy.face);
+      expect(sent.faceSimilarity, 0.81);
+      expect(sent.photo, isNull);
+      final sentFace = (await faces.all()).single;
+      expect(sentFace.status, SyncStatus.sent);
+      expect(sentFace.photo, isNull);
+    });
   });
 }

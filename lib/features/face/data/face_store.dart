@@ -37,7 +37,14 @@ class FaceStore {
     final db = await _db;
     final batch = db.batch();
     for (final r in results) {
-      batch.update('face_templates', {'sync_status': r.status.code, 'reason': r.reason},
+      batch.update(
+          'face_templates',
+          {
+            'sync_status': r.status.code,
+            'reason': r.reason,
+            // The server has the photo now; the phone only needs the embedding
+            if (r.status == SyncStatus.sent) 'photo': null,
+          },
           where: 'employee_code = ? AND sync_status = ?', whereArgs: [r.id, SyncStatus.waiting.code]);
     }
     await batch.commit(noResult: true);

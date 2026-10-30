@@ -73,6 +73,19 @@ class FacePreprocessor {
     return Rect.fromPoints(toSensor(box.left, box.top), toSensor(box.right, box.bottom));
   }
 
+  /// The face as a small JPEG for records: the box with some margin, made square, [size] px wide.
+  /// Not aligned, so it looks like what the camera saw.
+  static Uint8List facePhotoJpeg(img.Image upright, Rect box, {int size = 240, int quality = 80}) {
+    final side = math.max(box.width, box.height) * 1.4;
+    final x = (box.center.dx - side / 2).clamp(0, upright.width - 1).toInt();
+    final y = (box.center.dy - side / 2).clamp(0, upright.height - 1).toInt();
+    final w = math.min(side.round(), upright.width - x);
+    final h = math.min(side.round(), upright.height - y);
+    final crop = img.copyCrop(upright, x: x, y: y, width: w, height: h);
+    final small = crop.width > size ? img.copyResize(crop, width: size, interpolation: img.Interpolation.average) : crop;
+    return img.encodeJpg(small, quality: quality);
+  }
+
   /// --------------------------------------------------------------------------
   /// 2. EYE LANDMARK ALIGNMENT & CROPPING
   /// --------------------------------------------------------------------------
