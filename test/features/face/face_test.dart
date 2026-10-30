@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:agrum_mobile/core/db/app_database.dart';
+import 'package:agrum_mobile/features/face/data/camera_image_converter.dart';
 import 'package:agrum_mobile/features/attendance/data/attendance_store.dart';
 import 'package:agrum_mobile/features/face/data/face_preprocessor.dart';
 import 'package:agrum_mobile/features/face/data/face_recognizer.dart';
@@ -475,6 +476,48 @@ void main() {
       final sentFace = (await faces.all()).single;
       expect(sentFace.status, SyncStatus.sent);
       expect(sentFace.photo, isNull);
+    });
+  });
+
+  group('more than one face', () {
+    Face at(Rect box) => Face(boundingBox: box, contours: const {}, landmarks: const {});
+
+    // A grey 480x640 portrait frame (sensor not rotated), only to reach the face-count check
+    // ignore: deprecated_member_use
+    final frame = CameraImage.fromPlatformData({
+      'format': 35,
+      'width': 480,
+      'height': 640,
+      'planes': [
+        {'bytes': Uint8List(480 * 640)..fillRange(0, 480 * 640, 128), 'bytesPerRow': 480, 'bytesPerPixel': 1},
+        for (var i = 0; i < 2; i++)
+          {'bytes': Uint8List(480 * 640 ~/ 2)..fillRange(0, 480 * 640 ~/ 2, 128), 'bytesPerRow': 480, 'bytesPerPixel': 2},
+      ],
+    });
+    final person = at(const Rect.fromLTWH(140, 200, 200, 240));
+
+    test('the biggest face is the one checked', () {
+      final small = at(const Rect.fromLTWH(10, 10, 40, 48));
+      expect(mainFace([small, person]), same(person));
+      expect(mainFace(const []), isNull);
+    });
+
+    test('a small face in the background is ignored', () {
+      final result = evaluateFaceQuality(frame, [at(const Rect.fromLTWH(10, 10, 60, 70)), person], rotationDegrees: 0)!;
+      expect(result.message, isNot('Only one person at a time'));
+      expect(result.boundingBox, person.boundingBox);
+    });
+
+    test('the same face found twice (overlapping boxes, white background) is one person', () {
+      final twice = at(const Rect.fromLTWH(150, 210, 190, 230));
+      final result = evaluateFaceQuality(frame, [person, twice], rotationDegrees: 0)!;
+      expect(result.message, isNot('Only one person at a time'));
+    });
+
+    test('a second face nearly as big is two people', () {
+      final result = evaluateFaceQuality(frame, [person, at(const Rect.fromLTWH(300, 220, 150, 180))], rotationDegrees: 0)!;
+      expect(result.isGood, isFalse);
+      expect(result.message, 'Only one person at a time');
     });
   });
 }

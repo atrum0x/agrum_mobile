@@ -195,6 +195,29 @@ Future<String> saveCameraImageAsJpeg({
   return outputPath;
 }
 
+/// A second face at least this wide, compared with the main one, means two people are at the camera.
+const secondFaceRatio = 0.6;
+
+/// Whether [other] is another person next to [main]: nearly as big, and not overlapping it. Two boxes
+/// that overlap are the same face found twice, since two heads can't be in the same place.
+bool isSecondPerson(Face main, Face other) {
+  if (identical(main, other)) return false;
+  final a = main.boundingBox, b = other.boundingBox;
+  if (b.width < a.width * secondFaceRatio) return false;
+  final overlap = a.intersect(b);
+  final overlapArea = overlap.width > 0 && overlap.height > 0 ? overlap.width * overlap.height : 0.0;
+  final smaller = (a.width * a.height) < (b.width * b.height) ? a.width * a.height : b.width * b.height;
+  return overlapArea < smaller * maxSameFaceOverlap;
+}
+
+/// Boxes sharing more than this part of the smaller one are the same face.
+const maxSameFaceOverlap = 0.3;
+
+/// The biggest face: the one in the oval. Null when there is none.
+Face? mainFace(List<Face> faces) => faces.isEmpty
+    ? null
+    : faces.reduce((a, b) => a.boundingBox.width * a.boundingBox.height >= b.boundingBox.width * b.boundingBox.height ? a : b);
+
 /// Runs the face quality checks against ML Kit's detection result for a
 /// single frame. Returns null if no face is present at all (caller treats
 /// that as WAITING_FOR_FACE, distinct from a *bad* detected face).
@@ -218,15 +241,17 @@ FaceQualityResult? evaluateFaceQuality(
 }) {
   if (faces.isEmpty) return null;
 
-  if (faces.length > 1) {
+  // The person being checked is the biggest face. Ignored: smaller faces (someone behind, a poster, a
+  // false detection) and boxes overlapping it (ML Kit sometimes finds the same face twice). Only a
+  // second face nearly as big, somewhere else in the picture, means two people
+  final face = mainFace(faces)!;
+  if (faces.any((f) => isSecondPerson(face, f))) {
     return FaceQualityResult(
       isGood: false,
       message: 'Only one person at a time',
-      boundingBox: faces.first.boundingBox,
+      boundingBox: face.boundingBox,
     );
   }
-
-  final face = faces.first;
 
   final sideways = rotationDegrees == 90 || rotationDegrees == 270;
   final imageWidth = sideways ? cameraImage.height : cameraImage.width;

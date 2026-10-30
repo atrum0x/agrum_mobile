@@ -9,6 +9,7 @@ import 'package:image/image.dart' as img;
 import 'package:tflite_flutter/tflite_flutter.dart';
 
 import '../domain/embedding_aggregator.dart';
+import 'camera_image_converter.dart' show mainFace;
 import 'face_preprocessor.dart';
 import 'in_memory_face_processor.dart';
 
@@ -195,7 +196,9 @@ class FaceRecognizer {
     if (faces.isEmpty) throw Exception('No face found in the photo. Try again.');
 
     final address = _interpreter!.address;
-    final sample = await _oneAtATime(() => _embedPhotoInBackground(address, imagePath, faces.first, keepPhoto));
+    // The biggest face, as on the live camera: not a small one in the background
+    final face = mainFace(faces)!;
+    final sample = await _oneAtATime(() => _embedPhotoInBackground(address, imagePath, face, keepPhoto));
 
     _workerSamples.putIfAbsent(employeeCode, () => []).add(sample.embedding);
     if (sample.photo != null) _workerPhotos[employeeCode] = sample.photo!;
