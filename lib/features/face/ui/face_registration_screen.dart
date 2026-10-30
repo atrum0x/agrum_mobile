@@ -24,6 +24,7 @@ import '../data/face_template_row.dart';
 import '../domain/face_quality.dart';
 import '../state/face_providers.dart';
 import 'face_camera_view.dart';
+import 'face_scanner.dart' show faceCheckError, noFramesAfter, noFramesMessage;
 
 const _text = TextStyle(fontSize: 14);
 const _muted = TextStyle(fontSize: 13, color: AppColors.mutedForeground);
@@ -171,6 +172,10 @@ class _PoseCaptureState extends ConsumerState<_PoseCapture> {
   String? _subtitle;
   String? _error;
 
+  /// Set once the face check has answered for any frame; see [_watchdog].
+  bool _gotFrame = false;
+  Timer? _watchdog;
+
   String get _code => widget.employee.employeeCode;
 
   @override
@@ -182,6 +187,7 @@ class _PoseCaptureState extends ConsumerState<_PoseCapture> {
 
   @override
   void dispose() {
+    _watchdog?.cancel();
     unawaited(_camera.dispose());
     // Left half way: drop the captured poses; the worker's saved face, if any, stays
     if (!_allDone) _recognizer.clear(_code);
@@ -195,10 +201,17 @@ class _PoseCaptureState extends ConsumerState<_PoseCapture> {
       _recognizer.clear(_code);
       await _camera.initialize(lensDirection: CameraLensDirection.back);
       _camera.onFrameAnalyzed = _onFrameAnalyzed;
-      _camera.onError = (e) => debugPrint('Camera/ML Kit error: $e');
+      // Shown on screen: a face check that keeps failing would otherwise just look stuck
+      _camera.onError = (e) {
+        debugPrint('Camera/ML Kit error: $e');
+        if (!_processingLock) _setSubtitle(faceCheckError(e));
+      };
       _applyPoseThresholds();
       await _camera.startStream();
       if (mounted) setState(() => _cameraReady = true);
+      _watchdog = Timer(noFramesAfter, () {
+        if (!_gotFrame) _setSubtitle(noFramesMessage);
+      });
     } on CameraException catch (e) {
       if (mounted) {
         setState(() => _error = e.code.contains('AccessDenied')
@@ -217,6 +230,7 @@ class _PoseCaptureState extends ConsumerState<_PoseCapture> {
   }
 
   void _onFrameAnalyzed(CameraImage rawImage, FaceQualityResult? quality, bool isStable) {
+    _gotFrame = true;
     if (_processingLock || _allDone || !mounted) return;
 
     if (quality == null) {

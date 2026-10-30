@@ -71,6 +71,8 @@ class FaceCameraService with WidgetsBindingObserver {
   /// without maxing out the CPU alongside camera preview rendering.
   static const int processEveryNthFrame = 2;
 
+  static const analysisTimeout = Duration(seconds: 3);
+
   final _stability = _FaceStabilityTracker();
 
   /// Acceptable yaw (left/right turn) range for the CURRENT quality check.
@@ -196,7 +198,8 @@ class FaceCameraService with WidgetsBindingObserver {
       final inputImage = buildInputImage(image, _camera!, deviceOrientation);
       if (inputImage == null) return;
 
-      final faces = await _faceDetector!.processImage(inputImage);
+      // A call that never returns would block every later frame (_isProcessingFrame), so give up on it
+      final faces = await _faceDetector!.processImage(inputImage).timeout(analysisTimeout);
       final quality = evaluateFaceQuality(
         image,
         faces,

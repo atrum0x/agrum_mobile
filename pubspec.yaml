@@ -8,7 +8,9 @@ environment:
 
 dependencies:
   biometric_signature: ^13.3.0
-  camera: ^0.12.2
+  # Pinned to the versions the face demo was proven with on a phone (camerax 0.6, ML Kit commons 0.12);
+  # 0.12 / 0.15 sent no usable frames to face detection
+  camera: 0.11.4
   connectivity_plus: ^7.3.2
   crypto: ^3.0.7
   dio: ^5.11.1
@@ -17,7 +19,7 @@ dependencies:
   flutter_riverpod: ^3.4.3
   flutter_secure_storage: ^11.2.0
   go_router: ^17.5.0
-  google_mlkit_face_detection: ^0.15.1
+  google_mlkit_face_detection: 0.14.0
   image: ^4.12.0
   intl: any
   lottie: ^3.6.1

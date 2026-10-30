@@ -13,6 +13,12 @@ import 'face_camera_view.dart';
 
 enum _ScanState { starting, waiting, adjusting, checking, failed, error }
 
+/// If the face check hasn't answered for a single frame by then, say so instead of looking stuck.
+const noFramesAfter = Duration(seconds: 5);
+const noFramesMessage = 'The camera is not sending pictures to the face check. Close this screen and open it again.';
+
+String faceCheckError(Object error) => 'Face check failed: $error';
+
 /// Identifies a worker by face from the live camera.
 ///
 /// [onRecognised] gets the matched EMP No and returns null to accept it (the parent then removes the
@@ -43,6 +49,8 @@ class _FaceScannerState extends ConsumerState<FaceScanner> {
   String? _message;
   bool _processingLock = false;
   Timer? _cooldownTimer;
+  bool _gotFrame = false;
+  Timer? _watchdog;
 
   @override
   void didChangeDependencies() {
@@ -60,6 +68,7 @@ class _FaceScannerState extends ConsumerState<FaceScanner> {
   @override
   void dispose() {
     _cooldownTimer?.cancel();
+    _watchdog?.cancel();
     _generation++;
     unawaited(_camera?.dispose());
     super.dispose();
@@ -77,11 +86,19 @@ class _FaceScannerState extends ConsumerState<FaceScanner> {
         return;
       }
       camera.onFrameAnalyzed = _onFrameAnalyzed;
-      camera.onError = (e) => debugPrint('Camera/ML Kit error: $e');
+      camera.onError = (e) {
+        debugPrint('Camera/ML Kit error: $e');
+        if (!_processingLock) _set(_ScanState.error, faceCheckError(e));
+      };
       _camera = camera;
       _processingLock = false;
+      _gotFrame = false;
       await camera.startStream();
       _set(_ScanState.waiting, null);
+      _watchdog?.cancel();
+      _watchdog = Timer(noFramesAfter, () {
+        if (!_gotFrame && generation == _generation) _set(_ScanState.error, noFramesMessage);
+      });
     } on CameraException catch (e) {
       await camera.dispose();
       if (generation != _generation) return;
@@ -100,6 +117,7 @@ class _FaceScannerState extends ConsumerState<FaceScanner> {
   Future<void> _stop() async {
     _generation++;
     _cooldownTimer?.cancel();
+    _watchdog?.cancel();
     final camera = _camera;
     _camera = null;
     if (mounted) setState(() {});
@@ -113,6 +131,7 @@ class _FaceScannerState extends ConsumerState<FaceScanner> {
   }
 
   void _onFrameAnalyzed(CameraImage rawImage, FaceQualityResult? quality, bool isStable) {
+    _gotFrame = true;
     if (_processingLock) return;
     if (quality == null) return _set(_ScanState.waiting, null);
     if (!quality.isGood) return _set(_ScanState.adjusting, quality.message);

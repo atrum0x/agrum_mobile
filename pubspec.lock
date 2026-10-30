@@ -53,26 +53,26 @@ packages:
     dependency: "direct main"
     description:
       name: camera
-      sha256: "4a0863bc142f6fbfdca19161205574fd8a8f00d4753b48d214c4dfbdcc534c51"
+      sha256: "4142a19a38e388d3bab444227636610ba88982e36dff4552d5191a86f65dc437"
       url: "https://pub.dev"
     source: hosted
-    version: "0.12.2"
+    version: "0.11.4"
   camera_android_camerax:
     dependency: transitive
     description:
       name: camera_android_camerax
-      sha256: b5e0a2a8e63f2788139379926a9abc3a64eed5e309c1384e5db25b74f15b7307
+      sha256: "8516fe308bc341a5067fb1a48edff0ddfa57c0d3cdcc9dbe7ceca3ba119e2577"
       url: "https://pub.dev"
     source: hosted
-    version: "0.7.6+1"
+    version: "0.6.30"
   camera_avfoundation:
     dependency: transitive
     description:
       name: camera_avfoundation
-      sha256: "971f7b4938ae761797dd667c078af92f1b6a1bb7760774c0cbcf9c9d4a14bdf1"
+      sha256: "11b4aee2f5e5e038982e152b4a342c749b414aa27857899d20f4323e94cb5f0b"
       url: "https://pub.dev"
     source: hosted
-    version: "0.11.1"
+    version: "0.9.23+2"
   camera_platform_interface:
     dependency: transitive
     description:
@@ -393,18 +393,18 @@ packages:
     dependency: transitive
     description:
       name: google_mlkit_commons
-      sha256: "621e94de22fd0f1e902e593b892746d80ab7542b39c2552aa091d904eb82fc6f"
+      sha256: c7fc384bdb66c3b83e24e3a41818e61d7a378d900f65f5e775344fbca95a0917
       url: "https://pub.dev"
     source: hosted
-    version: "0.13.0"
+    version: "0.12.0"
   google_mlkit_face_detection:
     dependency: "direct main"
     description:
       name: google_mlkit_face_detection
-      sha256: dd4a6c61e45390217cdc7522e7766b77e9d075cdface0503716ec6722e33d4f4
+      sha256: "719735518c0a961072d1757a097af8fec458426accad0a58eae0763942a3f14c"
       url: "https://pub.dev"
     source: hosted
-    version: "0.15.1"
+    version: "0.14.0"
   hooks:
     dependency: transitive
     description:
