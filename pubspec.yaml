@@ -8,6 +8,7 @@ environment:
 
 dependencies:
   biometric_signature: ^13.3.0
+  camera: ^0.12.2
   connectivity_plus: ^7.3.2
   crypto: ^3.0.7
   dio: ^5.11.1
@@ -16,11 +17,15 @@ dependencies:
   flutter_riverpod: ^3.4.3
   flutter_secure_storage: ^11.2.0
   go_router: ^17.5.0
+  google_mlkit_face_detection: ^0.15.1
+  image: ^4.12.0
   intl: any
   lottie: ^3.6.1
   path: ^1.9.1
+  path_provider: ^2.1.6
   shadcn_ui: 0.57.3
   sqflite: ^2.4.5
+  tflite_flutter: ^0.12.1
   uuid: ^4.6.0
 
 dev_dependencies:
@@ -36,6 +41,8 @@ flutter:
   assets:
     - assets/logo.png
     - assets/logo.json
+    # ArcFace face embeddings (face recognition on the weighing screen)
+    - assets/arcface_512.tflite
 
 # App icon from the web logo. Regenerate with: dart run flutter_launcher_icons
 flutter_launcher_icons:

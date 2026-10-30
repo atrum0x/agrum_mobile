@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_exception.dart';
 import '../../auth/state/auth_controller.dart';
+import '../../face/data/face_store.dart';
+import '../../face/data/face_sync_api.dart';
 import '../data/setup_api.dart';
 import '../data/setup_cache.dart';
 
@@ -59,6 +61,10 @@ class SetupController extends Notifier<SetupState> {
     try {
       final data = await ref.read(setupApiProvider).fetch();
       await _cache.save(data, username: auth.session.profile.username, receivedAt: DateTime.now());
+      // Registered faces come with the site data, for identifying workers on the weighing screen
+      if (auth.session.profile.canDownloadFaces) {
+        await ref.read(faceStoreProvider).replaceSent(await ref.read(faceSyncApiProvider).fetch());
+      }
       final info = await _cache.info();
       if (ref.mounted) state = SetupState(info: info);
       return null;

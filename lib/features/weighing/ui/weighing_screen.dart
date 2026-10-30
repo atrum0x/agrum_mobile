@@ -6,6 +6,8 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import '../../../app/theme.dart';
 import '../../../shared/widgets/sync_status_badge.dart';
 import '../../auth/state/auth_controller.dart';
+import '../../face/state/face_providers.dart';
+import '../../face/ui/face_scanner.dart';
 import '../../sync/data/sync_status.dart';
 import '../data/weight_row.dart';
 import '../domain/weighing_rules.dart';
@@ -23,6 +25,8 @@ final _date = DateFormat('dd/MM/yyyy');
 /// scale status, worker search, worker name, site · collection point · work type, Entries Today,
 /// the weight, Capture Weight / Manual Entry, Save, and the weighings waiting to send.
 ///
+/// The worker is picked by face from the camera, or by search when their face isn't registered.
+///
 /// The scale (6) is not built yet (CL-06 open): it always shows as not connected, so weights are
 /// entered manually by users granted Manual Entry.
 class WeighingScreen extends ConsumerStatefulWidget {
@@ -35,6 +39,9 @@ class WeighingScreen extends ConsumerStatefulWidget {
 class _WeighingScreenState extends ConsumerState<WeighingScreen> {
   String? _attendanceId;
   String _search = '';
+
+  /// Picking the worker by search instead of by face.
+  bool _searchMode = false;
   EntryType? _entryType;
   String? _error;
   bool _saving = false;
@@ -53,6 +60,7 @@ class _WeighingScreenState extends ConsumerState<WeighingScreen> {
   void _clear() {
     _attendanceId = null;
     _search = '';
+    _searchMode = false;
     _entryType = null;
     _error = null;
     _searchController.clear();
@@ -71,6 +79,18 @@ class _WeighingScreenState extends ConsumerState<WeighingScreen> {
     }
     final canManual = auth.session.profile.canEnterWeightManually;
     final worker = source.workers.where((w) => w.attendanceId == _attendanceId).firstOrNull;
+    final faces = ref.watch(registeredFacesProvider);
+
+    // A face match picks the worker, if they can be weighed today
+    String? pickByFace(String employeeCode) {
+      final match = source.workers.where((w) => w.employeeCode == employeeCode).firstOrNull;
+      if (match == null) return "$employeeCode is not on today's weighing list.";
+      setState(() {
+        _attendanceId = match.attendanceId;
+        _error = null;
+      });
+      return null;
+    }
 
     Future<void> save() async {
       final now = DateTime.now();
@@ -122,7 +142,19 @@ class _WeighingScreenState extends ConsumerState<WeighingScreen> {
                   icon: const Icon(LucideIcons.cloudOff),
                   description: const Text(WeighingMessages.noSiteData, style: _text),
                 )
-              else if (worker == null)
+              else if (worker == null && !_searchMode && faces.isNotEmpty) ...[
+                FaceScanner(onRecognised: pickByFace),
+                _ModeLink(
+                  icon: LucideIcons.search,
+                  text: 'Search by EMP No or name',
+                  onTap: () => setState(() => _searchMode = true),
+                ),
+              ] else if (worker == null) ...[
+                if (faces.isEmpty) ...[
+                  const Text('No faces registered on this phone. Register them in More → Face Registration.',
+                      style: _muted),
+                  const SizedBox(height: 12),
+                ],
                 _WorkerPicker(
                   controller: _searchController,
                   search: _search,
@@ -132,8 +164,18 @@ class _WeighingScreenState extends ConsumerState<WeighingScreen> {
                     _attendanceId = w.attendanceId;
                     _error = null;
                   }),
-                )
-              else ...[
+                ),
+                if (faces.isNotEmpty)
+                  _ModeLink(
+                    icon: LucideIcons.scanFace,
+                    text: 'Identify by face',
+                    onTap: () => setState(() {
+                      _searchMode = false;
+                      _search = '';
+                      _searchController.clear();
+                    }),
+                  ),
+              ] else ...[
                 _SelectedWorker(
                   worker: worker,
                   onChange: () => setState(() {
@@ -212,6 +254,28 @@ class _WeighingScreenState extends ConsumerState<WeighingScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Switches between picking the worker by face and by search.
+class _ModeLink extends StatelessWidget {
+  const _ModeLink({required this.icon, required this.text, required this.onTap});
+
+  final IconData icon;
+  final String text;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: ShadButton.ghost(
+        height: 48,
+        leading: Icon(icon, size: 18),
+        onPressed: onTap,
+        child: Text(text, style: _text),
+      ),
     );
   }
 }

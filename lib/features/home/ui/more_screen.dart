@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../../app/theme.dart';
 import '../../auth/state/auth_controller.dart';
 import '../../auth/state/fingerprint_controller.dart';
 import '../../auth/ui/fingerprint_ui.dart';
+import '../../face/state/face_providers.dart';
 import '../../setup/state/setup_controller.dart';
 import '../../sync/state/send_controller.dart';
 
@@ -24,6 +26,7 @@ class MoreScreen extends ConsumerWidget {
     final send = ref.watch(sendControllerProvider);
     final setup = ref.watch(setupControllerProvider);
     final fingerprint = ref.watch(fingerprintControllerProvider);
+    final faces = ref.watch(registeredFacesProvider);
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -111,6 +114,27 @@ class MoreScreen extends ConsumerWidget {
             ],
           ],
         ),
+        if (profile.canRegisterFaces)
+          _Section(
+            title: 'Face Registration',
+            children: [
+              _Line(
+                icon: LucideIcons.scanFace,
+                color: faces.isEmpty ? AppColors.pending : AppColors.primary,
+                text: faces.isEmpty
+                    ? 'No faces registered on this phone'
+                    : '${faces.length} ${faces.length == 1 ? 'face' : 'faces'} registered on this phone',
+              ),
+              const SizedBox(height: 12),
+              ShadButton.outline(
+                height: 48,
+                width: double.infinity,
+                leading: const Icon(LucideIcons.scanFace, size: 20),
+                onPressed: () => context.go('/more/faces'),
+                child: const Text('Register Face', style: TextStyle(fontSize: 16)),
+              ),
+            ],
+          ),
         if (fingerprint.loaded && fingerprint.available)
           _Section(title: 'Login', children: [FingerprintSetting(username: profile.username)]),
         const SizedBox(height: 8),

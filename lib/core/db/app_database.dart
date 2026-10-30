@@ -6,7 +6,7 @@ import 'package:sqflite/sqflite.dart';
 class AppDatabase {
   const AppDatabase._();
 
-  static const version = 2;
+  static const version = 3;
 
   static Future<Database> open({DatabaseFactory? factory, String? path}) async {
     final dbFactory = factory ?? databaseFactory;
@@ -18,9 +18,11 @@ class AppDatabase {
         onCreate: (db, _) async {
           await _createV1(db);
           await _upgradeToV2(db);
+          await _upgradeToV3(db);
         },
         onUpgrade: (db, from, _) async {
           if (from < 2) await _upgradeToV2(db);
+          if (from < 3) await _upgradeToV3(db);
         },
       ),
     );
@@ -125,6 +127,21 @@ class AppDatabase {
       ..execute('ALTER TABLE weight_rows ADD COLUMN cp_code TEXT')
       ..execute('ALTER TABLE weight_rows ADD COLUMN work_type TEXT');
     await batch.commit(noResult: true);
+  }
+
+  /// Registered faces for the weighing screen: downloaded from the server (SENT) or registered on
+  /// this phone and waiting to be sent. One per worker; registering again replaces it.
+  static Future<void> _upgradeToV3(Database db) async {
+    await db.execute('''
+      CREATE TABLE face_templates (
+        employee_code TEXT PRIMARY KEY,
+        embedding BLOB NOT NULL,
+        sample_count INTEGER NOT NULL,
+        registered_at TEXT NOT NULL,
+        registered_by TEXT NOT NULL,
+        sync_status TEXT NOT NULL,
+        reason TEXT
+      )''');
   }
 }
 

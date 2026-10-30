@@ -11,11 +11,12 @@ class SendQueue {
 
   static const waiting = 'WAITING';
 
-  /// Attendance and weighings the user recorded that are not sent yet.
+  /// Attendance, weighings and faces the user recorded that are not sent yet.
   Future<int> waitingCount(String username) async {
     final rows = await (await _db).rawQuery('''
       SELECT (SELECT COUNT(*) FROM attendance_rows WHERE recorded_by = ?1 AND sync_status = ?2)
-           + (SELECT COUNT(*) FROM weight_rows WHERE recorded_by = ?1 AND sync_status = ?2) AS n
+           + (SELECT COUNT(*) FROM weight_rows WHERE recorded_by = ?1 AND sync_status = ?2)
+           + (SELECT COUNT(*) FROM face_templates WHERE registered_by = ?1 AND sync_status = ?2) AS n
       ''', [username, waiting]);
     return Sqflite.firstIntValue(rows) ?? 0;
   }

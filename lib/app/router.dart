@@ -6,6 +6,7 @@ import '../features/attendance/ui/add_attendance_screen.dart';
 import '../features/attendance/ui/attendance_screen.dart';
 import '../features/auth/state/auth_controller.dart';
 import '../features/auth/ui/login_screen.dart';
+import '../features/face/ui/face_registration_screen.dart';
 import '../features/home/ui/app_shell.dart';
 import '../features/home/ui/home_screen.dart';
 import '../features/home/ui/more_screen.dart';
@@ -62,7 +63,15 @@ final routerProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [GoRoute(path: AppTab.weighing.path, builder: (_, _) => const WeighingScreen())],
           ),
-          StatefulShellBranch(routes: [GoRoute(path: AppTab.more.path, builder: (_, _) => const MoreScreen())]),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppTab.more.path,
+                builder: (_, _) => const MoreScreen(),
+                routes: [GoRoute(path: 'faces', builder: (_, _) => const FaceRegistrationScreen())],
+              ),
+            ],
+          ),
         ],
       ),
     ],

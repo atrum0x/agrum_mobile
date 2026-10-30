@@ -4,6 +4,9 @@ import '../../../core/api/api_exception.dart';
 import '../../attendance/data/attendance_row.dart';
 import '../../attendance/data/attendance_store.dart';
 import '../../attendance/data/attendance_sync_api.dart';
+import '../../face/data/face_store.dart';
+import '../../face/data/face_sync_api.dart';
+import '../../face/data/face_template_row.dart';
 import '../../weighing/data/weight_row.dart';
 import '../../weighing/data/weight_store.dart';
 import '../../weighing/data/weight_sync_api.dart';
@@ -24,13 +27,15 @@ class SyncOutcome {
 }
 
 /// FSD 10.5: sends the user's Waiting records, attendance first, then weighings, each in recorded
-/// order. Every record gets its own Sent / Rejected answer; a failed call leaves rows Waiting.
+/// order, then registered faces. Every record gets its own Sent / Rejected answer; a failed call leaves rows Waiting.
 class SyncEngine {
   SyncEngine({
     required this.attendance,
     required this.attendanceApi,
     required this.weights,
     required this.weightApi,
+    this.faces,
+    this.faceApi,
     this.batchSize = 100,
   });
 
@@ -38,6 +43,10 @@ class SyncEngine {
   final AttendanceSyncApi attendanceApi;
   final WeightStore weights;
   final WeightSyncApi weightApi;
+
+  /// Faces are sent only when both are given.
+  final FaceStore? faces;
+  final FaceSyncApi? faceApi;
   final int batchSize;
 
   /// [onProgress] gets what is being sent and how far it got, for the status line.
@@ -80,6 +89,24 @@ class SyncEngine {
         onProgress: onProgress,
         count: count,
       );
+      if (faces case final faces?) {
+        if (faceApi case final faceApi?) {
+          await _sendAll<FaceTemplateRow>(
+            what: 'faces',
+            waiting: () => faces.waiting(username),
+            // A face is replaced by registering again, so its id is the worker plus when
+            id: (r) => 'face:${r.employeeCode}@${r.registeredAt.toIso8601String()}',
+            send: (chunk) async {
+              final results = await faceApi.send(chunk);
+              await faces.applyResults(results);
+              return results.map((r) => r.status).toList();
+            },
+            attempted: attempted,
+            onProgress: onProgress,
+            count: count,
+          );
+        }
+      }
     } on ApiException catch (e) {
       return SyncOutcome(sent: sent, rejected: rejected, error: e.message, networkError: e.isNetwork);
     }
@@ -114,4 +141,6 @@ final syncEngineProvider = Provider<SyncEngine>((ref) => SyncEngine(
       attendanceApi: ref.watch(attendanceSyncApiProvider),
       weights: ref.watch(weightStoreProvider),
       weightApi: ref.watch(weightSyncApiProvider),
+      faces: ref.watch(faceStoreProvider),
+      faceApi: ref.watch(faceSyncApiProvider),
     ));
