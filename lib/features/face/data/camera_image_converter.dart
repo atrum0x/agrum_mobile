@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
@@ -30,7 +31,7 @@ const _deviceOrientations = <DeviceOrientation, int>{
 /// sensor mounting angle (`camera.sensorOrientation`) and the current
 /// device rotation. Front cameras are mirrored on the sensor, so the
 /// compensation direction flips relative to the back camera.
-int _rotationCompensationDegrees(
+int rotationCompensationDegrees(
   CameraDescription camera,
   DeviceOrientation deviceOrientation,
 ) {
@@ -96,7 +97,7 @@ InputImage? buildInputImage(
   CameraDescription camera,
   DeviceOrientation deviceOrientation,
 ) {
-  final rotationDegrees = _rotationCompensationDegrees(camera, deviceOrientation);
+  final rotationDegrees = rotationCompensationDegrees(camera, deviceOrientation);
   final rotation = InputImageRotationValue.fromRawValue(rotationDegrees);
   if (rotation == null) return null;
 
@@ -184,15 +185,13 @@ Future<String> saveCameraImageAsJpeg({
   required String outputPath,
   int quality = 90,
 }) async {
-  final rgbImage = _yuv420ToImage(image);
-  final rotationDegrees = _rotationCompensationDegrees(camera, deviceOrientation);
-  final upright = rotationDegrees == 0
-      ? rgbImage
-      : img.copyRotate(rgbImage, angle: rotationDegrees);
-
-  final jpegBytes = img.encodeJpg(upright, quality: quality);
-  final file = File(outputPath);
-  await file.writeAsBytes(jpegBytes, flush: true);
+  final rotationDegrees = rotationCompensationDegrees(camera, deviceOrientation);
+  // Converting and encoding a whole frame takes long enough to stall the preview, so do it off the UI thread
+  await Isolate.run(() {
+    final rgbImage = _yuv420ToImage(image);
+    final upright = rotationDegrees == 0 ? rgbImage : img.copyRotate(rgbImage, angle: rotationDegrees);
+    File(outputPath).writeAsBytesSync(img.encodeJpg(upright, quality: quality), flush: true);
+  });
   return outputPath;
 }
 
@@ -203,11 +202,13 @@ Future<String> saveCameraImageAsJpeg({
 /// Yaw range (`minYaw`/`maxYaw`) is overridable so the registration screen
 /// can reuse this for "turn slightly left/right" pose prompts instead of
 /// only accepting a frontal face.
+/// ML Kit's boxes are in the upright picture ([rotationDegrees] from [rotationCompensationDegrees]),
+/// so size and centring are measured against the upright frame, and the brightness and blur check
+/// maps the box back onto the sensor's Y plane.
 FaceQualityResult? evaluateFaceQuality(
   CameraImage cameraImage,
-  List<Face> faces,
-  int imageWidth,
-  int imageHeight, {
+  List<Face> faces, {
+  required int rotationDegrees,
   double maxRoll = 15,
   double minYaw = -15,
   double maxYaw = 15,
@@ -227,12 +228,23 @@ FaceQualityResult? evaluateFaceQuality(
 
   final face = faces.first;
 
-  // 1. Run Luminance & Blur Gatekeeper
-  final isQualityValid = FacePreprocessor.isFrameQualityValid(cameraImage, face);
-  if (!isQualityValid) {
+  final sideways = rotationDegrees == 90 || rotationDegrees == 270;
+  final imageWidth = sideways ? cameraImage.height : cameraImage.width;
+  final imageHeight = sideways ? cameraImage.width : cameraImage.height;
+
+  // 1. Brightness and blur, on the face's pixels
+  final yPlane = cameraImage.planes.first;
+  final pictureProblem = FacePreprocessor.pictureProblem(
+    yPlane.bytes,
+    yPlane.bytesPerRow,
+    cameraImage.width,
+    cameraImage.height,
+    FacePreprocessor.uprightToSensorRect(face.boundingBox, rotationDegrees, cameraImage.width, cameraImage.height),
+  );
+  if (pictureProblem != null) {
     return FaceQualityResult(
       isGood: false,
-      message: 'Adjust lighting or hold camera steady',
+      message: pictureProblem,
       boundingBox: face.boundingBox,
     );
   }

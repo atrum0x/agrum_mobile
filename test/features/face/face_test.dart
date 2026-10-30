@@ -1,15 +1,20 @@
+import 'dart:isolate';
 import 'dart:math';
+import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:agrum_mobile/core/db/app_database.dart';
 import 'package:agrum_mobile/features/attendance/data/attendance_store.dart';
 import 'package:agrum_mobile/features/face/data/face_preprocessor.dart';
+import 'package:agrum_mobile/features/face/data/face_recognizer.dart';
 import 'package:agrum_mobile/features/face/data/face_store.dart';
 import 'package:agrum_mobile/features/face/data/face_sync_api.dart';
 import 'package:agrum_mobile/features/face/data/face_template_row.dart';
+import 'package:agrum_mobile/features/face/data/in_memory_face_processor.dart';
 import 'package:agrum_mobile/features/sync/data/sync_engine.dart';
 import 'package:agrum_mobile/features/sync/data/sync_status.dart';
 import 'package:agrum_mobile/features/weighing/data/weight_store.dart';
+import 'package:camera/camera.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:image/image.dart' as img;
@@ -183,5 +188,113 @@ void main() {
       expect((leftEye.y - rightEye.y).abs(), lessThan(2), reason: 'eye line should be level');
       expect(mouth.y, greaterThan(leftEye.y + 20), reason: 'mouth should stay below the eyes');
     });
+  });
+
+  group('matching', () {
+    // Unit vectors in 2 of the 512 dimensions, at a chosen angle from the probe
+    List<double> at(double cosine) {
+      final v = List<double>.filled(FaceTemplateRow.dimensions, 0);
+      v[0] = cosine;
+      v[1] = sqrt(1 - cosine * cosine);
+      return v;
+    }
+
+    final probe = at(1);
+
+    test('the closest face wins when it is clearly ahead', () {
+      final match = bestMatch(probe, {'E001': at(0.80), 'E002': at(0.50)});
+      expect(match.success, isTrue);
+      expect(match.employeeCode, 'E001');
+    });
+
+    test('two faces almost as close: no guess', () {
+      final match = bestMatch(probe, {'E001': at(0.80), 'E002': at(0.76)});
+      expect(match.success, isFalse);
+      expect(match.error, 'Not sure who this is');
+    });
+
+    test('below the threshold: not recognised, however far ahead', () {
+      final match = bestMatch(probe, {'E001': at(0.40), 'E002': at(0.0)});
+      expect(match.success, isFalse);
+      expect(match.error, 'Face not recognised');
+    });
+
+    test('one registered face only needs the threshold', () {
+      expect(bestMatch(probe, {'E001': at(0.50)}).employeeCode, 'E001');
+    });
+  });
+
+  group('picture checks', () {
+    test('an upright box maps back onto the sensor picture', () {
+      // Sensor 640x480 turned 90° clockwise is a 480x640 upright picture
+      const box = Rect.fromLTRB(100, 200, 180, 300);
+      expect(FacePreprocessor.uprightToSensorRect(box, 0, 640, 480), box);
+      expect(FacePreprocessor.uprightToSensorRect(box, 90, 640, 480), const Rect.fromLTRB(200, 300, 300, 380));
+      expect(FacePreprocessor.uprightToSensorRect(box, 180, 640, 480), const Rect.fromLTRB(460, 180, 540, 280));
+      expect(FacePreprocessor.uprightToSensorRect(box, 270, 640, 480), const Rect.fromLTRB(340, 100, 440, 180));
+    });
+
+    // A 100x100 Y plane with 8 bytes of row padding
+    const w = 100, h = 100, stride = 108;
+    Uint8List plane(int Function(int x, int y) luma) {
+      final bytes = Uint8List(stride * h);
+      for (var y = 0; y < h; y++) {
+        for (var x = 0; x < w; x++) {
+          bytes[y * stride + x] = luma(x, y).clamp(0, 255);
+        }
+      }
+      return bytes;
+    }
+
+    const face = Rect.fromLTRB(20, 20, 80, 80);
+    String? check(Uint8List bytes) => FacePreprocessor.pictureProblem(bytes, stride, w, h, face);
+
+    test('sharp detail at normal brightness passes', () {
+      expect(check(plane((x, y) => (x ~/ 3 + y ~/ 3).isEven ? 90 : 150)), isNull);
+    });
+
+    test('the same brightness range but soft edges is blurred', () {
+      // A slow ramp: as much contrast as the sharp one, but no edges
+      expect(check(plane((x, y) => 90 + x * 60 ~/ w)), 'Picture is blurred. Hold the camera steady');
+    });
+
+    test('dark and bright faces are named as such', () {
+      expect(check(plane((x, y) => (x + y).isEven ? 10 : 30)), 'Too dark. Move to better light');
+      expect(check(plane((x, y) => (x + y).isEven ? 230 : 250)), 'Too bright. Move out of direct light');
+    });
+  });
+
+  test('a camera frame and an ML Kit face can go to a background isolate for the crop', () async {
+    // A grey 640x480 YUV420 frame laid out like Android's: separate U and V planes, 2 bytes apart
+    const w = 640, h = 480;
+    // ignore: deprecated_member_use
+    final frame = CameraImage.fromPlatformData({
+      'format': 35, // ImageFormat.YUV_420_888
+      'width': w,
+      'height': h,
+      'planes': [
+        {'bytes': Uint8List(w * h)..fillRange(0, w * h, 128), 'bytesPerRow': w, 'bytesPerPixel': 1},
+        for (var i = 0; i < 2; i++)
+          {'bytes': Uint8List(w * h ~/ 2)..fillRange(0, w * h ~/ 2, 128), 'bytesPerRow': w, 'bytesPerPixel': 2},
+      ],
+    });
+    final face = Face(
+      boundingBox: const Rect.fromLTWH(140, 200, 200, 200),
+      contours: const {},
+      landmarks: {
+        FaceLandmarkType.leftEye: FaceLandmark(type: FaceLandmarkType.leftEye, position: const Point(290, 260)),
+        FaceLandmarkType.rightEye: FaceLandmark(type: FaceLandmarkType.rightEye, position: const Point(190, 270)),
+      },
+    );
+
+    final tensor = await Isolate.run(() => InMemoryFaceProcessor.processFrameToTensor(
+          image: frame,
+          face: face,
+          sensorOrientation: 90,
+        ));
+
+    expect(tensor.length, 112 * 112 * 3);
+    // Mid grey stays near 0 after the [-1, 1] scaling
+    expect(tensor.every((v) => v.abs() < 0.05), isTrue);
   });
 }

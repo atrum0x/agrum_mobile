@@ -197,14 +197,14 @@ class FaceCameraService with WidgetsBindingObserver {
 
       final inputImage = buildInputImage(image, _camera!, deviceOrientation);
       if (inputImage == null) return;
+      final rotationDegrees = rotationCompensationDegrees(_camera!, deviceOrientation);
 
       // A call that never returns would block every later frame (_isProcessingFrame), so give up on it
       final faces = await _faceDetector!.processImage(inputImage).timeout(analysisTimeout);
       final quality = evaluateFaceQuality(
         image,
         faces,
-        image.width,
-        image.height,
+        rotationDegrees: rotationDegrees,
         minYaw: minYaw,
         maxYaw: maxYaw,
         maxRoll: maxRoll,

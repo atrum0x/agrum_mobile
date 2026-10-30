@@ -1,5 +1,7 @@
 import 'dart:math' as math;
-import 'package:camera/camera.dart';
+import 'dart:typed_data';
+import 'dart:ui';
+
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:image/image.dart' as img;
 
@@ -7,68 +9,68 @@ class FacePreprocessor {
   /// --------------------------------------------------------------------------
   /// 1. BRIGHTNESS & BLUR GATEKEEPER
   /// --------------------------------------------------------------------------
-  /// Validates frame quality BEFORE running expensive ArcFace inference.
-  static bool isFrameQualityValid(
-    CameraImage cameraImage,
-    Face face, {
-    double minLuminance = 40.0,  // Lower bound for darkness (0-255 scale)
-    double maxLuminance = 220.0, // Upper bound for overexposure (0-255 scale)
-    double minBlurVar = 100.0,   // Laplacian variance threshold for blur
+  /// Checks the face area of the camera's brightness (Y) plane before running ArcFace. Returns what's
+  /// wrong with the picture, or null when it's good enough.
+  ///
+  /// [sensorBox] is the face in the plane's own (sensor) coordinates: see [uprightToSensorRect].
+  /// Blur is the variance of the Laplacian, which is low when edges are soft (motion or focus); plain
+  /// contrast would also pass a blurred face in strong light.
+  static String? pictureProblem(
+    Uint8List yPlane,
+    int bytesPerRow,
+    int width,
+    int height,
+    Rect sensorBox, {
+    double minLuminance = 40.0, // 0-255
+    double maxLuminance = 220.0,
+    double minSharpness = 15.0, // Laplacian variance; tune on real phones
   }) {
-    final rect = face.boundingBox;
+    // One pixel in from the edge, so every sample has all four neighbours
+    final left = sensorBox.left.floor().clamp(1, width - 2);
+    final top = sensorBox.top.floor().clamp(1, height - 2);
+    final right = sensorBox.right.ceil().clamp(1, width - 1);
+    final bottom = sensorBox.bottom.ceil().clamp(1, height - 1);
+    if (right <= left || bottom <= top) return null;
 
-    // Fast bounds safety check against camera dimensions
-    final left = rect.left.toInt().clamp(0, cameraImage.width - 1);
-    final top = rect.top.toInt().clamp(0, cameraImage.height - 1);
-    final right = rect.right.toInt().clamp(0, cameraImage.width);
-    final bottom = rect.bottom.toInt().clamp(0, cameraImage.height);
-
-    final width = right - left;
-    final height = bottom - top;
-    if (width <= 0 || height <= 0) return false;
-
-    // Access Y plane (Luminance) directly from raw YUV420 stream without decoding
-    final yPlane = cameraImage.planes[0];
-    final rowStride = yPlane.bytesPerRow;
-    final bytes = yPlane.bytes;
-
-    double totalLuminance = 0;
-    int pixelCount = 0;
-    final List<int> ySamples = [];
-
-    for (int y = top; y < bottom; y += 2) { // Step by 2 for speed
-      for (int x = left; x < right; x += 2) {
-        final index = (y * rowStride) + x;
-        if (index < bytes.length) {
-          final luma = bytes[index];
-          totalLuminance += luma;
-          ySamples.add(luma);
-          pixelCount++;
-        }
+    var lumaSum = 0.0;
+    var lapSum = 0.0;
+    var lapSquares = 0.0;
+    var n = 0;
+    for (var y = top; y < bottom; y += 2) {
+      final row = y * bytesPerRow;
+      for (var x = left; x < right; x += 2) {
+        final i = row + x;
+        if (i + bytesPerRow >= yPlane.length) continue;
+        final c = yPlane[i];
+        final lap = 4 * c - yPlane[i - 1] - yPlane[i + 1] - yPlane[i - bytesPerRow] - yPlane[i + bytesPerRow];
+        lumaSum += c;
+        lapSum += lap;
+        lapSquares += lap * lap;
+        n++;
       }
     }
+    if (n == 0) return null;
 
-    if (pixelCount == 0) return false;
+    final luma = lumaSum / n;
+    if (luma < minLuminance) return 'Too dark. Move to better light';
+    if (luma > maxLuminance) return 'Too bright. Move out of direct light';
 
-    // A. Check Average Brightness
-    final avgLuminance = totalLuminance / pixelCount;
-    if (avgLuminance < minLuminance || avgLuminance > maxLuminance) {
-      return false; // Frame is too dark or overexposed
-    }
+    final lapMean = lapSum / n;
+    final sharpness = lapSquares / n - lapMean * lapMean;
+    if (sharpness < minSharpness) return 'Picture is blurred. Hold the camera steady';
+    return null;
+  }
 
-    // B. Check Blur via Variance of Laplacian Approximation
-    double mean = avgLuminance;
-    double sumVariance = 0;
-    for (var val in ySamples) {
-      sumVariance += (val - mean) * (val - mean);
-    }
-    double variance = sumVariance / pixelCount;
-
-    if (variance < minBlurVar) {
-      return false; // Frame is motion blurred or out of focus
-    }
-
-    return true;
+  /// Maps a box from the upright picture ML Kit reports in, back to the camera sensor's picture,
+  /// which is [width]×[height] and turned [rotationDegrees] clockwise to stand upright.
+  static Rect uprightToSensorRect(Rect box, int rotationDegrees, int width, int height) {
+    Offset toSensor(double u, double v) => switch (rotationDegrees) {
+          90 => Offset(v, height - u),
+          180 => Offset(width - u, height - v),
+          270 => Offset(width - v, u),
+          _ => Offset(u, v),
+        };
+    return Rect.fromPoints(toSensor(box.left, box.top), toSensor(box.right, box.bottom));
   }
 
   /// --------------------------------------------------------------------------

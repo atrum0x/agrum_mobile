@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math';
 
 import 'package:camera/camera.dart';
@@ -11,9 +12,8 @@ import '../domain/embedding_aggregator.dart';
 import 'face_preprocessor.dart';
 import 'in_memory_face_processor.dart';
 
-// Ported from face_verification_demo (FaceVerificationService). Known gaps still to fix: no liveness
-// check, 1:N search over every registered face, inference on the UI thread, quality checks in the
-// wrong image space.
+// Ported from face_verification_demo (FaceVerificationService). Known gap still to fix: no liveness
+// check, so a photo of a registered worker is accepted.
 
 class RegistrationPose {
   final String instruction;
@@ -58,12 +58,20 @@ class FaceMatch {
 }
 
 /// ArcFace embeddings on the phone: registers several samples per worker and finds the best match.
+///
+/// The picture work and the model run in a background isolate, on the same interpreter, so the
+/// camera preview doesn't stutter. One runs at a time; the interpreter isn't safe to share.
 class FaceRecognizer {
   static const double matchThreshold = 0.45;
+
+  /// How far the best face must be ahead of the next one. Closer than that, two registered workers
+  /// look alike to the model and guessing would weigh the wrong person.
+  static const double minMargin = 0.08;
 
   Interpreter? _interpreter;
   FaceDetector? _diskFaceDetector;
   Future<void>? _loading;
+  Future<void> _running = Future.value();
 
   /// Poses captured so far in a registration that isn't finished.
   final Map<String, List<List<double>>> _workerSamples = {};
@@ -92,10 +100,18 @@ class FaceRecognizer {
 
   Future<void> _load() async {
     final options = InterpreterOptions()..threads = 4;
-    _interpreter = await Interpreter.fromAsset('assets/arcface_512.tflite', options: options);
+    _interpreter = await Interpreter.fromAsset('assets/arcface_512.tflite', options: options)
+      ..allocateTensors();
     _diskFaceDetector = FaceDetector(
       options: FaceDetectorOptions(performanceMode: FaceDetectorMode.accurate, enableLandmarks: true),
     );
+  }
+
+  /// Runs [job] after the one before it has finished.
+  Future<T> _oneAtATime<T>(Future<T> Function() job) {
+    final result = _running.then((_) => job());
+    _running = result.then((_) {}, onError: (_) {});
+    return result;
   }
 
   Future<FaceMatch> identify({
@@ -112,33 +128,9 @@ class FaceRecognizer {
     }
 
     try {
-      final Float32List floatTensor = InMemoryFaceProcessor.processFrameToTensor(
-        image: image,
-        face: face,
-        sensorOrientation: sensorOrientation,
-        targetWidth: 112,
-        targetHeight: 112,
-      );
-
-      final inputData = _buildInputTensor(floatTensor, _interpreter!.getInputTensor(0));
-      final normalizedEmbedding = _l2Normalize(_runModel(inputData));
-
-      String? bestMatchCode;
-      double maxSimilarity = -1.0;
-      _registeredTemplates.forEach((code, templateEmbedding) {
-        final similarity = _cosineSimilarity(normalizedEmbedding, templateEmbedding);
-        if (similarity > maxSimilarity) {
-          maxSimilarity = similarity;
-          bestMatchCode = code;
-        }
-      });
-
-      debugPrint('[Face] best $bestMatchCode ${maxSimilarity.toStringAsFixed(4)} (threshold $threshold)');
-
-      if (bestMatchCode != null && maxSimilarity >= threshold) {
-        return FaceMatch(success: true, employeeCode: bestMatchCode, similarity: maxSimilarity);
-      }
-      return FaceMatch(success: false, similarity: maxSimilarity, error: 'Face not recognised');
+      final address = _interpreter!.address;
+      final embedding = await _oneAtATime(() => _embedFrameInBackground(address, image, face, sensorOrientation));
+      return bestMatch(embedding, _registeredTemplates, threshold: threshold);
     } catch (e) {
       return FaceMatch(success: false, error: 'Face check failed: $e');
     }
@@ -153,57 +145,111 @@ class FaceRecognizer {
     final faces = await _diskFaceDetector!.processImage(InputImage.fromFilePath(imagePath));
     if (faces.isEmpty) throw Exception('No face found in the photo. Try again.');
 
-    final originalImage = img.decodeImage(await File(imagePath).readAsBytes());
-    if (originalImage == null) throw Exception('Could not read the photo. Try again.');
+    final address = _interpreter!.address;
+    final embedding = await _oneAtATime(() => _embedPhotoInBackground(address, imagePath, faces.first));
 
-    // Align and crop using FacePreprocessor to ensure pipeline parity
-    final croppedFace = FacePreprocessor.alignAndCropFace(originalImage, faces.first, targetSize: 112);
-    if (croppedFace == null) throw Exception('Could not crop the face. Try again.');
-
-    final inputData = _buildInputFromCroppedImage(croppedFace, _interpreter!.getInputTensor(0));
-    final normalizedEmbedding = _l2Normalize(_runModel(inputData));
-
-    _workerSamples.putIfAbsent(employeeCode, () => []).add(normalizedEmbedding);
+    _workerSamples.putIfAbsent(employeeCode, () => []).add(embedding);
     debugPrint('[Face] registered $employeeCode, ${_workerSamples[employeeCode]!.length} samples');
-  }
-
-  List<double> _runModel(Object inputData) {
-    final outputTensor = _interpreter!.getOutputTensor(0);
-    final isOutputUint8 = outputTensor.type.toString().toLowerCase().contains('uint8');
-    if (isOutputUint8) {
-      final outputBuffer = List.generate(1, (_) => List<int>.filled(512, 0));
-      _interpreter!.run(inputData, outputBuffer);
-      final scale = outputTensor.params.scale;
-      final zeroPoint = outputTensor.params.zeroPoint;
-      return outputBuffer.first.map((e) => (e - zeroPoint) * scale).toList();
-    }
-    final outputBuffer = List.generate(1, (_) => List<double>.filled(512, 0.0));
-    _interpreter!.run(inputData, outputBuffer);
-    return outputBuffer.first.map((e) => e.toDouble()).toList();
-  }
-
-  List<double> _l2Normalize(List<double> embedding) {
-    double sum = 0.0;
-    for (final val in embedding) {
-      sum += val * val;
-    }
-    final norm = sqrt(sum);
-    if (norm == 0) return embedding;
-    return embedding.map((e) => e / norm).toList();
-  }
-
-  double _cosineSimilarity(List<double> e1, List<double> e2) {
-    double dotProduct = 0.0;
-    for (int i = 0; i < e1.length; i++) {
-      dotProduct += e1[i] * e2[i];
-    }
-    return dotProduct;
   }
 
   void dispose() {
     _diskFaceDetector?.close();
     _interpreter?.close();
   }
+}
+
+/// The registered face closest to [embedding]. A match needs [threshold] and must beat the next
+/// face by [margin]; the embeddings are L2-normalised, so the dot product is the cosine similarity.
+FaceMatch bestMatch(
+  List<double> embedding,
+  Map<String, List<double>> templates, {
+  double threshold = FaceRecognizer.matchThreshold,
+  double margin = FaceRecognizer.minMargin,
+}) {
+  String? bestCode;
+  var best = -1.0;
+  var second = -1.0;
+  templates.forEach((code, template) {
+    final similarity = _dot(embedding, template);
+    if (similarity > best) {
+      second = best;
+      best = similarity;
+      bestCode = code;
+    } else if (similarity > second) {
+      second = similarity;
+    }
+  });
+
+  debugPrint('[Face] best $bestCode ${best.toStringAsFixed(4)}, next ${second.toStringAsFixed(4)}');
+
+  if (bestCode == null || best < threshold) {
+    return FaceMatch(success: false, similarity: best, error: 'Face not recognised');
+  }
+  if (best - second < margin) {
+    return FaceMatch(success: false, similarity: best, error: 'Not sure who this is');
+  }
+  return FaceMatch(success: true, employeeCode: bestCode, similarity: best);
+}
+
+double _dot(List<double> a, List<double> b) {
+  var sum = 0.0;
+  for (var i = 0; i < a.length; i++) {
+    sum += a[i] * b[i];
+  }
+  return sum;
+}
+
+// Top-level, so the isolate gets only these arguments and not the recognizer around them
+
+Future<List<double>> _embedFrameInBackground(int address, CameraImage image, Face face, int sensorOrientation) =>
+    Isolate.run(() {
+      final interpreter = Interpreter.fromAddress(address, allocated: true);
+      final tensor = InMemoryFaceProcessor.processFrameToTensor(
+        image: image,
+        face: face,
+        sensorOrientation: sensorOrientation,
+        targetWidth: 112,
+        targetHeight: 112,
+      );
+      return _l2Normalize(_runModel(interpreter, _buildInputTensor(tensor, interpreter.getInputTensor(0))));
+    });
+
+Future<List<double>> _embedPhotoInBackground(int address, String imagePath, Face face) => Isolate.run(() {
+      final interpreter = Interpreter.fromAddress(address, allocated: true);
+      final originalImage = img.decodeImage(File(imagePath).readAsBytesSync());
+      if (originalImage == null) throw Exception('Could not read the photo. Try again.');
+
+      // Same alignment and crop as identify, so registered and live faces compare like for like
+      final croppedFace = FacePreprocessor.alignAndCropFace(originalImage, face, targetSize: 112);
+      if (croppedFace == null) throw Exception('Could not crop the face. Try again.');
+
+      final input = _buildInputFromCroppedImage(croppedFace, interpreter.getInputTensor(0));
+      return _l2Normalize(_runModel(interpreter, input));
+    });
+
+List<double> _runModel(Interpreter interpreter, Object inputData) {
+  final outputTensor = interpreter.getOutputTensor(0);
+  final isOutputUint8 = outputTensor.type.toString().toLowerCase().contains('uint8');
+  if (isOutputUint8) {
+    final outputBuffer = List.generate(1, (_) => List<int>.filled(512, 0));
+    interpreter.run(inputData, outputBuffer);
+    final scale = outputTensor.params.scale;
+    final zeroPoint = outputTensor.params.zeroPoint;
+    return outputBuffer.first.map((e) => (e - zeroPoint) * scale).toList();
+  }
+  final outputBuffer = List.generate(1, (_) => List<double>.filled(512, 0.0));
+  interpreter.run(inputData, outputBuffer);
+  return outputBuffer.first.map((e) => e.toDouble()).toList();
+}
+
+List<double> _l2Normalize(List<double> embedding) {
+  double sum = 0.0;
+  for (final val in embedding) {
+    sum += val * val;
+  }
+  final norm = sqrt(sum);
+  if (norm == 0) return embedding;
+  return embedding.map((e) => e / norm).toList();
 }
 
 Object _buildInputTensor(Float32List floatTensor, Tensor inputTensor) {
