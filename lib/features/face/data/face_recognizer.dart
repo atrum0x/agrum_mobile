@@ -47,6 +47,12 @@ const List<RegistrationPose> registrationPoses = [
   ),
 ];
 
+/// The registration's poses don't look like one face, e.g. one was a blurred picture or someone else.
+class PosesDisagreeException implements Exception {
+  @override
+  String toString() => "The poses don't look like the same face. Start again from the first pose.";
+}
+
 /// Who a face matched, by EMP No.
 class FaceMatch {
   final bool success;
@@ -65,7 +71,9 @@ class FaceMatch {
 /// The picture work and the model run in a background isolate, on the same interpreter, so the
 /// camera preview doesn't stutter. One runs at a time; the interpreter isn't safe to share.
 class FaceRecognizer {
-  static const double matchThreshold = 0.45;
+  /// Tested on the app's model: the same man scored 0.65-0.83 and two different men 0.44, so the
+  /// demo's 0.45 let lookalikes through. Below this the supervisor searches instead.
+  static const double matchThreshold = 0.60;
 
   /// How far the best face must be ahead of the next one. Closer than that, two registered workers
   /// look alike to the model and guessing would weigh the wrong person.
@@ -95,11 +103,17 @@ class FaceRecognizer {
     _workerPhotos.remove(employeeCode);
   }
 
+  /// How alike each pose must be to the others. Turned poses score lower than front ones, so this is
+  /// well below a match; it catches a pose that is something else entirely.
+  static const double minPoseAgreement = 0.5;
+
   /// The registration's face: the normalised mean of its poses, how many there were, and the photo.
+  /// Throws [PosesDisagreeException] (and drops the poses) when they don't look like one face.
   ({List<double> embedding, int sampleCount, Uint8List? photo}) finishRegistration(String employeeCode) {
     final samples = _workerSamples.remove(employeeCode);
     final photo = _workerPhotos.remove(employeeCode);
     if (samples == null || samples.isEmpty) throw StateError('No poses captured for $employeeCode');
+    if (!posesAgree(samples)) throw PosesDisagreeException();
     return (
       embedding: EmbeddingAggregator.computeNormalizedMeanEmbedding(samples),
       sampleCount: samples.length,
@@ -182,6 +196,17 @@ class FaceRecognizer {
   }
 }
 
+/// True when every pose is at least [minAgreement] alike to the mean of the other poses.
+bool posesAgree(List<List<double>> samples, {double minAgreement = FaceRecognizer.minPoseAgreement}) {
+  if (samples.length < 2) return true;
+  for (var i = 0; i < samples.length; i++) {
+    final others = [for (var j = 0; j < samples.length; j++) if (j != i) samples[j]];
+    final mean = EmbeddingAggregator.computeNormalizedMeanEmbedding(others);
+    if (_dot(samples[i], mean) < minAgreement) return false;
+  }
+  return true;
+}
+
 /// The registered face closest to [embedding]. A match needs [threshold] and must beat the next
 /// face by [margin]; the embeddings are L2-normalised, so the dot product is the cosine similarity.
 FaceMatch bestMatch(
@@ -250,7 +275,7 @@ Future<({List<double> embedding, Uint8List? photo})> _embedPhotoInBackground(
       if (originalImage == null) throw Exception('Could not read the photo. Try again.');
 
       // Same alignment and crop as identify, so registered and live faces compare like for like
-      final croppedFace = FacePreprocessor.alignAndCropFace(originalImage, face, targetSize: 112);
+      final croppedFace = FacePreprocessor.alignFace(originalImage, face);
       if (croppedFace == null) throw Exception('Could not crop the face. Try again.');
 
       final input = _buildInputFromCroppedImage(croppedFace, interpreter.getInputTensor(0));

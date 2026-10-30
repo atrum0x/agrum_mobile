@@ -177,6 +177,47 @@ void main() {
       return Point(sx / n, sy / n);
     }
 
+    test('five-point alignment puts eyes, nose and mouth where ArcFace expects them', () {
+      // The template's points, turned 20° and scaled 2.5x into a bigger picture, as a tilted face
+      const angle = 20 * pi / 180;
+      const s = 2.5;
+      (double, double) place((double, double) p) => (
+            150 + s * (cos(angle) * p.$1 - sin(angle) * p.$2),
+            40 + s * (sin(angle) * p.$1 + cos(angle) * p.$2),
+          );
+      final image = img.Image(width: 400, height: 400)..clear(img.ColorRgb8(255, 255, 255));
+      final placed = [for (final p in FacePreprocessor.arcFaceTemplate) place(p)];
+      for (final (x, y) in placed) {
+        img.fillCircle(image, x: x.round(), y: y.round(), radius: 6, color: img.ColorRgb8(0, 0, 0));
+      }
+      Point<int> pt((double, double) p) => Point(p.$1.round(), p.$2.round());
+      // ML Kit names eyes and mouth corners from the person's side: their left is on the picture right
+      final face = Face(
+        boundingBox: const Rect.fromLTWH(0, 0, 400, 400),
+        contours: const {},
+        landmarks: {
+          FaceLandmarkType.leftEye: FaceLandmark(type: FaceLandmarkType.leftEye, position: pt(placed[1])),
+          FaceLandmarkType.rightEye: FaceLandmark(type: FaceLandmarkType.rightEye, position: pt(placed[0])),
+          FaceLandmarkType.noseBase: FaceLandmark(type: FaceLandmarkType.noseBase, position: pt(placed[2])),
+          FaceLandmarkType.leftMouth: FaceLandmark(type: FaceLandmarkType.leftMouth, position: pt(placed[4])),
+          FaceLandmarkType.rightMouth: FaceLandmark(type: FaceLandmarkType.rightMouth, position: pt(placed[3])),
+        },
+      );
+
+      final out = FacePreprocessor.alignFace(image, face)!;
+      expect(out.width, 112);
+      for (final (tx, ty) in FacePreprocessor.arcFaceTemplate) {
+        final c = centroid(out, (x, y) => (x - tx).abs() < 9 && (y - ty).abs() < 9);
+        expect(c.x, closeTo(tx, 1.5));
+        expect(c.y, closeTo(ty, 1.5));
+      }
+    });
+
+    test('without all five landmarks it falls back to the box crop', () {
+      expect(FacePreprocessor.fiveLandmarks(mlKitFace()), isNull);
+      expect(FacePreprocessor.alignFace(drawFace(), mlKitFace())!.width, 112);
+    });
+
     test('levels the eyes and keeps the face upright', () {
       final out = FacePreprocessor.alignAndCropFace(drawFace(), mlKitFace(), targetSize: 112)!;
       expect(out.width, 112);
@@ -220,8 +261,24 @@ void main() {
       expect(match.error, 'Face not recognised');
     });
 
+    test('registration poses of one face agree; a pose of something else does not', () {
+      final front = at(1);
+      final turned = [at(0.9), at(0.85), at(0.95), at(0.88)];
+      expect(posesAgree([front, ...turned]), isTrue);
+
+      // e.g. the first pose was a blurred picture: not like the others
+      final other = List<double>.filled(FaceTemplateRow.dimensions, 0)..[2] = 1;
+      expect(posesAgree([other, ...turned]), isFalse);
+    });
+
     test('one registered face only needs the threshold', () {
-      expect(bestMatch(probe, {'E001': at(0.50)}).employeeCode, 'E001');
+      expect(bestMatch(probe, {'E001': at(0.65)}).employeeCode, 'E001');
+    });
+
+    test('two different men at 0.44 (measured on the app model) are not a match', () {
+      final match = bestMatch(probe, {'E001': at(0.44)});
+      expect(match.success, isFalse);
+      expect(match.error, 'Face not recognised');
     });
   });
 
@@ -235,8 +292,11 @@ void main() {
       expect(FacePreprocessor.uprightToSensorRect(box, 270, 640, 480), const Rect.fromLTRB(340, 100, 440, 180));
     });
 
-    // A 100x100 Y plane with 8 bytes of row padding
-    const w = 100, h = 100, stride = 108;
+    // A 200x200 Y plane with 8 bytes of row padding; the face box is 120 px wide
+    const w = 200, h = 200, stride = 208;
+    const faceBox = Rect.fromLTRB(40, 40, 160, 160);
+    String? check(Uint8List bytes) => FacePreprocessor.pictureProblem(bytes, stride, w, h, faceBox);
+
     Uint8List plane(int Function(int x, int y) luma) {
       final bytes = Uint8List(stride * h);
       for (var y = 0; y < h; y++) {
@@ -247,16 +307,40 @@ void main() {
       return bytes;
     }
 
-    const face = Rect.fromLTRB(20, 20, 80, 80);
-    String? check(Uint8List bytes) => FacePreprocessor.pictureProblem(bytes, stride, w, h, face);
+    /// Skin with dark brows, eyes and mouth, like a face at arm's length.
+    img.Image drawnFace() {
+      final face = img.Image(width: w, height: h)..clear(img.ColorRgb8(170, 170, 170));
+      final dark = img.ColorRgb8(60, 60, 60);
+      img.fillRect(face, x1: 62, y1: 72, x2: 92, y2: 78, color: dark);
+      img.fillRect(face, x1: 108, y1: 72, x2: 138, y2: 78, color: dark);
+      img.fillCircle(face, x: 77, y: 92, radius: 7, color: dark);
+      img.fillCircle(face, x: 123, y: 92, radius: 7, color: dark);
+      img.fillRect(face, x1: 96, y1: 100, x2: 104, y2: 120, color: img.ColorRgb8(130, 130, 130));
+      img.fillRect(face, x1: 80, y1: 132, x2: 120, y2: 138, color: dark);
+      return face;
+    }
 
-    test('sharp detail at normal brightness passes', () {
-      expect(check(plane((x, y) => (x ~/ 3 + y ~/ 3).isEven ? 90 : 150)), isNull);
+    Uint8List planeOf(img.Image image, {int noise = 0}) {
+      final random = Random(1);
+      return plane((x, y) => image.getPixel(x, y).r.toInt() + (noise == 0 ? 0 : random.nextInt(2 * noise + 1) - noise));
+    }
+
+    test('a sharp face passes', () {
+      expect(check(planeOf(drawnFace())), isNull);
     });
 
-    test('the same brightness range but soft edges is blurred', () {
-      // A slow ramp: as much contrast as the sharp one, but no edges
-      expect(check(plane((x, y) => 90 + x * 60 ~/ w)), 'Picture is blurred. Hold the camera steady');
+    test('a blurred face is blurred', () {
+      final blurred = img.gaussianBlur(drawnFace(), radius: 14);
+      expect(check(planeOf(blurred)), 'Picture is blurred. Hold the camera steady');
+    });
+
+    test('pixel noise on a blurred face (camera grain, a screen filmed) does not make it sharp', () {
+      final blurred = img.gaussianBlur(drawnFace(), radius: 14);
+      expect(check(planeOf(blurred, noise: 15)), 'Picture is blurred. Hold the camera steady');
+    });
+
+    test('noise does not stop a sharp face passing', () {
+      expect(check(planeOf(drawnFace(), noise: 15)), isNull);
     });
 
     test('dark and bright faces are named as such', () {

@@ -113,6 +113,8 @@ class FaceCameraService with WidgetsBindingObserver {
       options: FaceDetectorOptions(
         performanceMode: FaceDetectorMode.fast,
         enableTracking: true,
+        // Eyes, nose and mouth, to line the face up the same way registration does
+        enableLandmarks: true,
       ),
     );
 

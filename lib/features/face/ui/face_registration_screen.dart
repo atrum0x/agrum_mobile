@@ -280,7 +280,22 @@ class _PoseCaptureState extends ConsumerState<_PoseCapture> {
     if (!mounted) return;
     if (_poseIndex >= registrationPoses.length - 1) {
       await _camera.stopStream();
-      await _saveFace();
+      try {
+        await _saveFace();
+      } on PosesDisagreeException catch (e) {
+        if (!mounted) return;
+        // The poses are dropped; capture all of them again
+        setState(() {
+          _poseIndex = 0;
+          _subtitle = '$e';
+        });
+        _applyPoseThresholds();
+        _camera.resetStability();
+        await _camera.startStream();
+        await Future<void>.delayed(const Duration(seconds: 2));
+        _processingLock = false;
+        return;
+      }
       if (!mounted) return;
       setState(() {
         _allDone = true;

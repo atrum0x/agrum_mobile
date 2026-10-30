@@ -44,12 +44,8 @@ class InMemoryFaceProcessor {
     // No mirroring for the front camera: ML Kit's face box and landmarks are for the unmirrored
     // frame, and registration photos aren't mirrored either.
 
-    // 2. Align eye landmarks horizontally and crop 112x112 tensor directly
-    final img.Image? alignedFace = FacePreprocessor.alignAndCropFace(
-      rgbImage,
-      face,
-      targetSize: targetWidth,
-    );
+    // 2. Line the face up on its landmarks (the same as registration) at 112x112
+    final img.Image? alignedFace = FacePreprocessor.alignFace(rgbImage, face, size: targetWidth);
 
     if (alignedFace == null) {
       throw Exception('Failed to align and crop face region');
