@@ -53,6 +53,14 @@ class PosesDisagreeException implements Exception {
   String toString() => "The poses don't look like the same face. Start again from the first pose.";
 }
 
+/// The face is already registered to another employee: a face belongs to one employee only.
+class DuplicateFaceException implements Exception {
+  const DuplicateFaceException(this.employeeCode);
+
+  /// Who the face is registered to.
+  final String employeeCode;
+}
+
 /// Who a face matched, by EMP No.
 class FaceMatch {
   final bool success;
@@ -120,6 +128,10 @@ class FaceRecognizer {
       photo: photo,
     );
   }
+
+  /// Another employee whose registered face this is (close enough to be matched as them at the scale).
+  String? ownerOf(List<double> embedding, {required String except}) =>
+      faceOwner(embedding, _registeredTemplates, except: except);
 
   Future<void> ensureInitialized() => _loading ??= _load();
 
@@ -194,6 +206,26 @@ class FaceRecognizer {
     _diskFaceDetector?.close();
     _interpreter?.close();
   }
+}
+
+/// The employee other than [except] whose face is at least [threshold] alike, the closest if several.
+String? faceOwner(
+  List<double> embedding,
+  Map<String, List<double>> templates, {
+  required String except,
+  double threshold = FaceRecognizer.matchThreshold,
+}) {
+  String? owner;
+  var best = threshold;
+  templates.forEach((code, template) {
+    if (code == except) return;
+    final similarity = _dot(embedding, template);
+    if (similarity >= best) {
+      best = similarity;
+      owner = code;
+    }
+  });
+  return owner;
 }
 
 /// True when every pose is at least [minAgreement] alike to the mean of the other poses.

@@ -28,6 +28,7 @@ class UserProfile {
   /// Face Registration on the More tab, and downloading registered faces for the weighing screen.
   bool get canRegisterFaces => can('POST', '/api/face-templates/sync');
   bool get canDownloadFaces => can('GET', '/api/face-templates');
+  bool get canRemoveFaces => can('DELETE', '/api/face-templates/{employeeCode}');
 
   /// LG-05 for the phone: at least one of its windows.
   bool get hasMobileAccess => canRecordAttendance || canRecordWeights;

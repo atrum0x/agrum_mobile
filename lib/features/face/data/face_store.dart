@@ -24,6 +24,11 @@ class FaceStore {
     await (await _db).insert('face_templates', row.toRow(), conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
+  /// Forgets the worker's face on this phone.
+  Future<void> delete(String employeeCode) async {
+    await (await _db).delete('face_templates', where: 'employee_code = ?', whereArgs: [employeeCode]);
+  }
+
   /// The user's registrations waiting to be sent, oldest first.
   Future<List<FaceTemplateRow>> waiting(String username) async {
     final rows = await (await _db).query('face_templates',

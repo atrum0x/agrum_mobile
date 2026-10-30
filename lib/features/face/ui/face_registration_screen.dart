@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../../app/theme.dart';
+import '../../../core/api/api_exception.dart';
 import '../../../shared/widgets/sync_status_badge.dart';
 import '../../auth/state/auth_controller.dart';
 import '../../setup/data/setup_cache.dart';
@@ -20,6 +21,7 @@ import '../data/camera_image_converter.dart';
 import '../data/face_camera_service.dart';
 import '../data/face_recognizer.dart';
 import '../data/face_store.dart';
+import '../data/face_sync_api.dart';
 import '../data/face_template_row.dart';
 import '../domain/face_quality.dart';
 import '../state/face_providers.dart';
@@ -49,6 +51,43 @@ class _FaceRegistrationScreenState extends ConsumerState<FaceRegistrationScreen>
   CachedWorker? _employee;
   String _search = '';
 
+  /// Removes the face on the server first (needs a connection), then on this phone.
+  Future<void> _removeFace(CachedWorker w) async {
+    final name = '${w.fullName} (${w.employeeCode})';
+    final confirmed = await showShadDialog<bool>(
+      context: context,
+      builder: (context) => ShadDialog.alert(
+        title: const Text('Remove face'),
+        description: Text('Remove the registered face of $name? At the scale they are picked by search '
+            'until their face is registered again.'),
+        actions: [
+          ShadButton.outline(
+            height: 48,
+            child: const Text('Cancel'),
+            onPressed: () => Navigator.of(context).pop(false),
+          ),
+          ShadButton.destructive(
+            height: 48,
+            child: const Text('Remove'),
+            onPressed: () => Navigator.of(context).pop(true),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final toaster = ShadToaster.of(context);
+    try {
+      await ref.read(faceSyncApiProvider).remove(w.employeeCode);
+      await ref.read(faceStoreProvider).delete(w.employeeCode);
+      ref.invalidate(faceTemplatesProvider);
+      toaster.show(ShadToast(description: Text('Face removed for $name.')));
+    } on ApiException catch (e) {
+      toaster.show(ShadToast.destructive(
+        description: Text(e.isNetwork ? 'Removing a face needs a connection. Try again when online.' : e.message),
+      ));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final employee = _employee;
@@ -62,6 +101,8 @@ class _FaceRegistrationScreenState extends ConsumerState<FaceRegistrationScreen>
 
     final employeesAsync = ref.watch(_employeesProvider);
     final registered = ref.watch(registeredFacesProvider);
+    final auth = ref.watch(authControllerProvider);
+    final canRemove = auth is LoggedIn && auth.session.profile.canRemoveFaces;
     final employees = employeesAsync.value;
     if (employees == null) {
       return employeesAsync.hasError
@@ -136,9 +177,16 @@ class _FaceRegistrationScreenState extends ConsumerState<FaceRegistrationScreen>
                         ],
                       ),
                     ),
-                    if (registered[w.employeeCode] case final face?)
-                      SyncStatusBadge(status: face.status)
-                    else
+                    if (registered[w.employeeCode] case final face?) ...[
+                      SyncStatusBadge(status: face.status),
+                      if (canRemove)
+                        IconButton(
+                          tooltip: 'Remove face',
+                          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                          icon: const Icon(LucideIcons.trash2, size: 18, color: AppColors.mutedForeground),
+                          onPressed: () => _removeFace(w),
+                        ),
+                    ] else
                       const Icon(LucideIcons.scanFace, size: 20, color: AppColors.mutedForeground),
                   ],
                 ),
@@ -168,6 +216,9 @@ class _PoseCaptureState extends ConsumerState<_PoseCapture> {
   bool _processingLock = false;
   bool _faceInFrame = false;
   bool _allDone = false;
+
+  /// Why the face was not saved, e.g. it is already registered to another employee.
+  String? _refused;
   int _poseIndex = 0;
   String? _subtitle;
   String? _error;
@@ -295,6 +346,13 @@ class _PoseCaptureState extends ConsumerState<_PoseCapture> {
         await Future<void>.delayed(const Duration(seconds: 2));
         _processingLock = false;
         return;
+      } on DuplicateFaceException catch (e) {
+        if (!mounted) return;
+        final owner = ref.read(_employeesProvider).value?.where((w) => w.employeeCode == e.employeeCode).firstOrNull;
+        final name = owner == null ? e.employeeCode : '${owner.fullName} (${owner.employeeCode})';
+        setState(() => _refused = 'This face is already registered to $name. A face can belong to only one '
+            'employee. If that registration is wrong, remove it first.');
+        return;
       }
       if (!mounted) return;
       setState(() {
@@ -320,6 +378,10 @@ class _PoseCaptureState extends ConsumerState<_PoseCapture> {
     final auth = ref.read(authControllerProvider);
     if (auth is! LoggedIn) return;
     final face = _recognizer.finishRegistration(_code);
+    // A face belongs to one employee: refuse one that would be identified as someone else
+    if (_recognizer.ownerOf(face.embedding, except: _code) case final owner?) {
+      throw DuplicateFaceException(owner);
+    }
     await ref.read(faceStoreProvider).save(FaceTemplateRow(
           employeeCode: _code,
           embedding: face.embedding,
@@ -348,6 +410,33 @@ class _PoseCaptureState extends ConsumerState<_PoseCapture> {
   @override
   Widget build(BuildContext context) {
     final name = '${widget.employee.fullName} (${widget.employee.employeeCode})';
+
+    if (_refused case final refused?) {
+      return Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Icon(LucideIcons.circleX, size: 64, color: AppColors.destructive),
+            const SizedBox(height: 16),
+            Text('Face not saved for $name.',
+                textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Text(refused, textAlign: TextAlign.center, style: _text),
+            const SizedBox(height: 24),
+            ShadButton(
+              height: 48,
+              width: double.infinity,
+              gradient: AppColors.headerGradient,
+              shadows: AppColors.buttonShadows,
+              onPressed: widget.onClose,
+              child: const Text('Back to the list', style: TextStyle(fontSize: 15)),
+            ),
+          ],
+        ),
+      );
+    }
 
     if (_allDone) {
       return Padding(

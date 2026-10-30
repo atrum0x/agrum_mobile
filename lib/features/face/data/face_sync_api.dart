@@ -25,6 +25,21 @@ class FaceSyncApi {
     }
   }
 
+  /// Removes the worker's face on the server; other phones drop it at their next refresh. A face the
+  /// server never had (not sent yet) is fine.
+  Future<void> remove(String employeeCode) async {
+    try {
+      await _dio.delete<void>('/api/face-templates/${Uri.encodeComponent(employeeCode)}');
+    } catch (e) {
+      final error = ApiException.from(e);
+      if (error.status == 404) return;
+      if (error.status == 403) {
+        throw const ApiException('You do not have permission to remove faces.', status: 403);
+      }
+      throw error;
+    }
+  }
+
   /// Each face is Sent or Rejected on its own.
   Future<List<FaceSyncResult>> send(List<FaceTemplateRow> rows) async {
     try {

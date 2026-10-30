@@ -33,6 +33,11 @@ class FakeFaceApi implements FaceSyncApi {
   @override
   Future<List<FaceTemplateRow>> fetch() async => const [];
 
+  final removed = <String>[];
+
+  @override
+  Future<void> remove(String employeeCode) async => removed.add(employeeCode);
+
   @override
   Future<List<FaceSyncResult>> send(List<FaceTemplateRow> rows) async {
     log.addAll(rows.map((r) => 'face:${r.employeeCode}'));
@@ -88,6 +93,15 @@ void main() {
       store = FaceStore(Future.value(db));
     });
     tearDown(() => db.close());
+
+    test('a removed face is gone from the phone', () async {
+      await store.save(face('E001', status: SyncStatus.sent));
+      await store.save(face('E002', status: SyncStatus.waiting));
+
+      await store.delete('E001');
+
+      expect([for (final r in await store.all()) r.employeeCode], ['E002']);
+    });
 
     test('downloaded faces replace Sent ones but never a registration not sent yet', () async {
       await store.save(face('E001', status: SyncStatus.sent, value: 0.1));
@@ -269,6 +283,16 @@ void main() {
       // e.g. the first pose was a blurred picture: not like the others
       final other = List<double>.filled(FaceTemplateRow.dimensions, 0)..[2] = 1;
       expect(posesAgree([other, ...turned]), isFalse);
+    });
+
+    test('a face already registered to another employee is found; the same employee is not a duplicate', () {
+      final templates = {'E001': at(0.95), 'E002': at(0.30)};
+      // Registering E005 with a face E001 already has
+      expect(faceOwner(probe, templates, except: 'E005'), 'E001');
+      // Registering E001 again replaces their own face
+      expect(faceOwner(probe, templates, except: 'E001'), isNull);
+      // Lookalikes below the match threshold are different people
+      expect(faceOwner(probe, {'E002': at(0.44)}, except: 'E005'), isNull);
     });
 
     test('one registered face only needs the threshold', () {
