@@ -6,6 +6,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import '../../../app/window_app_bar.dart';
 import '../../auth/data/user_profile.dart';
 import '../../auth/state/auth_controller.dart';
+import '../../auth/ui/fingerprint_ui.dart';
 import 'notched_tab_bar.dart';
 
 /// A bottom tab; [branch] is its index in the router's StatefulShellRoute.
@@ -48,7 +49,7 @@ class AppShell extends ConsumerWidget {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: WindowAppBar(title: tabs[selected].label),
-      body: shell,
+      body: FingerprintOfferListener(child: shell),
       bottomNavigationBar: NotchedTabBar(
         tabs: tabs,
         selected: selected,

@@ -4,12 +4,14 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../../app/theme.dart';
 import '../../auth/state/auth_controller.dart';
+import '../../auth/state/fingerprint_controller.dart';
+import '../../auth/ui/fingerprint_ui.dart';
 import '../../setup/state/setup_controller.dart';
 import '../../sync/state/send_controller.dart';
 
 final _dateTime = DateFormat('dd/MM/yyyy HH:mm');
 
-/// The More tab: who is logged in, sending in words, site data, and Logout.
+/// The More tab: who is logged in, sending in words, site data, fingerprint login, and Logout.
 class MoreScreen extends ConsumerWidget {
   const MoreScreen({super.key});
 
@@ -21,6 +23,7 @@ class MoreScreen extends ConsumerWidget {
     final profile = auth.session.profile;
     final send = ref.watch(sendControllerProvider);
     final setup = ref.watch(setupControllerProvider);
+    final fingerprint = ref.watch(fingerprintControllerProvider);
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -108,6 +111,8 @@ class MoreScreen extends ConsumerWidget {
             ],
           ],
         ),
+        if (fingerprint.loaded && fingerprint.available)
+          _Section(title: 'Login', children: [FingerprintSetting(username: profile.username)]),
         const SizedBox(height: 8),
         ShadButton.outline(
           height: 52,

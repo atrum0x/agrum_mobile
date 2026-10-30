@@ -1,8 +1,11 @@
+import 'dart:convert';
+
 import 'package:agrum_mobile/core/api/api_exception.dart';
 import 'package:agrum_mobile/core/api/token_store.dart';
 import 'package:agrum_mobile/core/storage/key_value_store.dart';
 import 'package:agrum_mobile/features/auth/data/auth_api.dart';
 import 'package:agrum_mobile/features/auth/data/auth_repository.dart';
+import 'package:agrum_mobile/features/auth/data/fingerprint_keys.dart';
 import 'package:agrum_mobile/features/auth/data/offline_credential.dart';
 import 'package:agrum_mobile/features/auth/data/user_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -36,12 +39,14 @@ void main() {
   late TokenStore tokens;
   late bool online;
   late DateTime now;
+  late FakeFingerprintKeys keys;
 
   AuthRepository repo() => AuthRepository(
         api: api,
         tokens: tokens,
         store: store,
         isOnline: () async => online,
+        fingerprint: keys,
         clock: () => now,
         // Few iterations so the tests stay fast; same algorithm
         createCredential: (u, p, at) async => OfflineCredential.create(u, p, at, iterations: 10),
@@ -53,6 +58,7 @@ void main() {
     api = MockAuthApi();
     store = MemoryStore();
     tokens = TokenStore(store);
+    keys = FakeFingerprintKeys();
     online = true;
     now = DateTime.utc(2026, 10, 25, 6);
     when(() => api.login(any(), any())).thenAnswer((_) async => (accessToken: 'a1', refreshToken: 'r1'));
@@ -318,4 +324,194 @@ void main() {
       expect(await repo().restore(const Duration(minutes: 30)), isNull);
     });
   });
+
+  group('fingerprint login', () {
+    setUp(() {
+      when(() => api.registerFingerprint(any(), any(), any())).thenAnswer((_) async => 'k1');
+      when(() => api.fingerprintChallenge(any())).thenAnswer((_) async => 'c1');
+      when(() => api.loginWithFingerprint(any(), any()))
+          .thenAnswer((_) async => (accessToken: 'a2', refreshToken: 'r2'));
+      when(() => api.removeFingerprint(any())).thenAnswer((_) async {});
+    });
+
+    Future<void> turnedOn() async {
+      await repo().login('sup01', 'pw');
+      await repo().enableFingerprint('sup01', 'pw');
+      await repo().logout();
+    }
+
+    test('turning it on makes a Keystore key and registers it with the password', () async {
+      await repo().login('sup01', 'pw');
+      expect(await repo().shouldOfferFingerprint('sup01'), isTrue);
+
+      await repo().enableFingerprint('sup01', 'pw');
+
+      expect(keys.hasKey, isTrue);
+      verify(() => api.registerFingerprint('sup01', 'pw', 'public-1')).called(1);
+      expect(await repo().fingerprintLogin(), (username: 'sup01', keyId: 'k1'));
+      expect(await repo().shouldOfferFingerprint('sup01'), isFalse);
+    });
+
+    test('turning it on needs the internet', () async {
+      await repo().login('sup01', 'pw');
+      online = false;
+
+      await expectLater(repo().enableFingerprint('sup01', 'pw'),
+          throwsA(isA<LoginException>().having((e) => e.message, 'message', LoginMessages.fingerprintNeedsInternet)));
+      expect(keys.hasKey, isFalse);
+    });
+
+    test('a wrong password leaves it off and drops the new key', () async {
+      await repo().login('sup01', 'pw');
+      when(() => api.registerFingerprint(any(), any(), any()))
+          .thenThrow(const ApiException(LoginMessages.incorrect, status: 401));
+
+      await expectLater(repo().enableFingerprint('sup01', 'bad'),
+          throwsA(isA<LoginException>().having((e) => e.message, 'message', LoginMessages.incorrect)));
+      expect(keys.hasKey, isFalse);
+      expect(await repo().fingerprintLogin(), isNull);
+    });
+
+    test('not offered again after "Not now", nor without a fingerprint on the phone', () async {
+      await repo().login('sup01', 'pw');
+      await repo().declineFingerprint('SUP01');
+      expect(await repo().shouldOfferFingerprint('sup01'), isFalse);
+
+      store.values.remove('fingerprint_declined');
+      keys.isAvailable = false;
+      expect(await repo().shouldOfferFingerprint('sup01'), isFalse);
+    });
+
+    test('online: the key signs the server challenge and the session starts', () async {
+      await turnedOn();
+      now = now.add(const Duration(days: 2));
+
+      final session = await repo().loginWithFingerprint();
+
+      expect(session.offline, isFalse);
+      expect(session.profile.username, 'sup01');
+      verify(() => api.loginWithFingerprint('k1', 'signed:agrum-login:k1:c1')).called(1);
+      expect(await tokens.accessToken(), 'a2');
+      expect(await tokens.refreshToken(), 'r2');
+      // An online login: the offline period starts again, with the same password hash
+      final credential = OfflineCredential.fromJson(jsonDecode(store.values['offline_credential']!) as Map<String, dynamic>);
+      expect(credential.lastOnlineLoginAt, now);
+      expect(credential.matches('pw'), isTrue);
+    });
+
+    test('closing the prompt is not an error and starts nothing', () async {
+      await turnedOn();
+      keys.nextFailure = FingerprintFailure.canceled;
+
+      await expectLater(repo().loginWithFingerprint(), throwsA(isA<FingerprintCanceled>()));
+      verifyNever(() => api.loginWithFingerprint(any(), any()));
+      expect(await repo().fingerprintLogin(), isNotNull);
+    });
+
+    test('refused by the server (e.g. password changed): turned off, server message shown', () async {
+      await turnedOn();
+      const message = 'Fingerprint login is not set up on this phone. Please log in with your password.';
+      when(() => api.fingerprintChallenge(any())).thenThrow(const ApiException(message, status: 401));
+
+      await expectLater(repo().loginWithFingerprint(),
+          throwsA(isA<LoginException>().having((e) => e.message, 'message', message)));
+      expect(await repo().fingerprintLogin(), isNull);
+      expect(keys.hasKey, isFalse);
+    });
+
+    test('fingerprints changed on the phone: turned off here and on the server', () async {
+      await turnedOn();
+      keys.nextFailure = FingerprintFailure.invalidated;
+
+      await expectLater(repo().loginWithFingerprint(),
+          throwsA(isA<LoginException>().having((e) => e.message, 'message', LoginMessages.fingerprintsChanged)));
+      expect(await repo().fingerprintLogin(), isNull);
+      verify(() => api.removeFingerprint('k1')).called(1);
+    });
+
+    test('LG-07 offline: allowed within the period, after the fingerprint', () async {
+      await turnedOn();
+      online = false;
+      now = now.add(const Duration(days: 2));
+
+      final session = await repo().loginWithFingerprint();
+
+      expect(session.offline, isTrue);
+      expect(keys.signed.single, startsWith('agrum-offline:'));
+      verifyNever(() => api.fingerprintChallenge(any()));
+    });
+
+    test('LG-07 offline: refused after the period, without asking for the fingerprint', () async {
+      await turnedOn();
+      online = false;
+      now = now.add(const Duration(days: 3));
+
+      await expectLater(repo().loginWithFingerprint(),
+          throwsA(isA<LoginException>().having((e) => e.message, 'message', LoginMessages.connectToLogIn)));
+      expect(keys.signed, isEmpty);
+    });
+
+    test('server unreachable: falls back to the offline rules', () async {
+      await turnedOn();
+      when(() => api.fingerprintChallenge(any()))
+          .thenThrow(const ApiException('Cannot reach the server.', isNetwork: true));
+
+      final session = await repo().loginWithFingerprint();
+      expect(session.offline, isTrue);
+    });
+
+    test('Logout keeps it on', () async {
+      await turnedOn();
+      expect(await repo().fingerprintLogin(), isNotNull);
+      expect(keys.hasKey, isTrue);
+    });
+
+    test('another user logging in with a password turns it off', () async {
+      await turnedOn();
+      when(() => api.me()).thenAnswer((_) async => const UserProfile(
+          username: 'sup02', employeeName: null, superuser: false, permissions: {'POST:/api/attendance/sync'}));
+
+      await repo().login('sup02', 'pw2');
+
+      expect(await repo().fingerprintLogin(), isNull);
+      expect(keys.hasKey, isFalse);
+      verify(() => api.removeFingerprint('k1')).called(1);
+    });
+  });
+}
+
+/// Stands in for the Android Keystore: "signs" by prefixing the text.
+class FakeFingerprintKeys implements FingerprintKeys {
+  bool isAvailable = true;
+  bool hasKey = false;
+  int created = 0;
+  FingerprintFailure? nextFailure;
+  final signed = <String>[];
+
+  void _check() {
+    final failure = nextFailure;
+    nextFailure = null;
+    if (failure != null) throw FingerprintException(failure);
+  }
+
+  @override
+  Future<bool> available() async => isAvailable;
+
+  @override
+  Future<String> createKey() async {
+    _check();
+    hasKey = true;
+    return 'public-${++created}';
+  }
+
+  @override
+  Future<String> sign(String text) async {
+    _check();
+    if (!hasKey) throw const FingerprintException(FingerprintFailure.invalidated);
+    signed.add(text);
+    return 'signed:$text';
+  }
+
+  @override
+  Future<void> deleteKey() async => hasKey = false;
 }

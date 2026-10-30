@@ -8,6 +8,7 @@ import '../../../app/theme.dart';
 import '../../../core/connectivity.dart';
 import '../data/auth_repository.dart';
 import '../state/auth_controller.dart';
+import '../state/fingerprint_controller.dart';
 
 /// FSD 2.1 Login. Online when the server can be reached, otherwise offline login (LG-07).
 class LoginScreen extends ConsumerStatefulWidget {
@@ -28,11 +29,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _showPassword = false;
   bool _busy = false;
 
+  bool _askedFingerprint = false;
+
   @override
   void initState() {
     super.initState();
     final auth = ref.read(authControllerProvider);
     if (auth is LoggedOut) _formError = auth.message;
+    // Ask for the fingerprint as the screen opens, as banking apps do; not right after Logout
+    _askedFingerprint = auth is LoggedOut && auth.byUser;
+    ref.listenManual(fingerprintControllerProvider, (_, fingerprint) {
+      if (!fingerprint.canLogIn) return;
+      if (_username.text.isEmpty) _username.text = fingerprint.enabledFor!;
+      if (_askedFingerprint) return;
+      _askedFingerprint = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _fingerprintLogin();
+      });
+    }, fireImmediately: true);
   }
 
   @override
@@ -67,6 +81,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  Future<void> _fingerprintLogin() async {
+    if (_busy) return;
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _formError = null;
+      _busy = true;
+    });
+    try {
+      await ref.read(authControllerProvider.notifier).loginWithFingerprint();
+    } on FingerprintCanceled {
+      // Closed the prompt or chose "Use password": stay here for the password
+    } on LoginException catch (e) {
+      if (!mounted) return;
+      setState(() => _formError = e.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _formError = 'Something went wrong. Please try again.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   void _forgotPassword() {
     ShadToaster.of(
       context,
@@ -77,6 +113,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     final theme = ShadTheme.of(context);
     final online = ref.watch(onlineProvider).value ?? true;
+    final fingerprint = ref.watch(fingerprintControllerProvider);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -156,6 +193,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               : null,
                           child: Text(_busy ? 'Logging in…' : 'Login', style: const TextStyle(fontSize: 17)),
                         ),
+                        if (fingerprint.canLogIn) ...[
+                          const SizedBox(height: 12),
+                          ShadButton.outline(
+                            width: double.infinity,
+                            height: 52,
+                            enabled: !_busy,
+                            onPressed: _fingerprintLogin,
+                            leading: const Icon(LucideIcons.fingerprint, size: 22),
+                            child: const Text('Log in with fingerprint', style: TextStyle(fontSize: 17)),
+                          ),
+                        ],
                       ],
                     ),
                   ),

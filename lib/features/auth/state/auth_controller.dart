@@ -7,6 +7,7 @@ import '../../../app/config.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/connectivity.dart';
 import '../data/auth_repository.dart';
+import 'fingerprint_controller.dart';
 
 sealed class AuthState {
   const AuthState();
@@ -18,10 +19,13 @@ class AuthRestoring extends AuthState {
 }
 
 class LoggedOut extends AuthState {
-  const LoggedOut({this.message});
+  const LoggedOut({this.message, this.byUser = false});
 
   /// Shown on the Login screen, e.g. LG-06 after inactivity.
   final String? message;
+
+  /// The user tapped Logout: the Login screen doesn't ask for the fingerprint by itself.
+  final bool byUser;
 }
 
 class LoggedIn extends AuthState {
@@ -77,7 +81,26 @@ class AuthController extends Notifier<AuthState> {
   Future<void> login(String username, String password) async {
     final session = await _repo.login(username, password);
     _offlinePassword = session.offline ? password : null;
+    if (!session.offline) {
+      try {
+        await ref.read(fingerprintControllerProvider.notifier).offerAfterLogin(session.profile.username, password);
+      } catch (_) {
+        // The offer is optional; never block the login on it
+      }
+    }
     _signedIn(session);
+  }
+
+  /// Throws [LoginException] with the message to show, or [FingerprintCanceled].
+  Future<void> loginWithFingerprint() async {
+    try {
+      final session = await _repo.loginWithFingerprint();
+      _offlinePassword = null;
+      _signedIn(session);
+    } finally {
+      // A refused or destroyed key turns fingerprint login off
+      unawaited(ref.read(fingerprintControllerProvider.notifier).refresh());
+    }
   }
 
   /// An offline session gets online as soon as it can, so it has a token to send with (LG-07): first
@@ -120,9 +143,10 @@ class AuthController extends Notifier<AuthState> {
 
   Future<void> logout() async {
     _offlinePassword = null;
+    ref.read(fingerprintControllerProvider.notifier).clearOffer();
     _idleTimer?.cancel();
     await _repo.logout();
-    state = const LoggedOut();
+    state = const LoggedOut(byUser: true);
   }
 
   /// LG-06: the server refused to refresh the session.
@@ -134,6 +158,7 @@ class AuthController extends Notifier<AuthState> {
   Future<void> _expire({required bool keepRefreshToken}) async {
     if (state is! LoggedIn) return;
     _offlinePassword = null;
+    ref.read(fingerprintControllerProvider.notifier).clearOffer();
     _idleTimer?.cancel();
     await _repo.expire(keepRefreshToken: keepRefreshToken);
     state = const LoggedOut(message: LoginMessages.sessionExpired);

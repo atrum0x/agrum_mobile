@@ -1,5 +1,6 @@
 package com.atrum.agrum_mobile
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity : FlutterActivity()
+// FragmentActivity: the fingerprint prompt (androidx BiometricPrompt) needs it
+class MainActivity : FlutterFragmentActivity()

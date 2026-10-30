@@ -40,6 +40,53 @@ class AuthApi {
     }
   }
 
+  /// Sets up fingerprint login on this phone; the password proves it is the user. Returns the key id.
+  Future<String> registerFingerprint(String username, String password, String publicKey) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/api/auth/biometric/register/mobile',
+        data: {'username': username, 'password': password, 'publicKey': publicKey},
+      );
+      return response.data!['keyId'] as String;
+    } catch (e) {
+      throw ApiException.from(e);
+    }
+  }
+
+  /// A one-time challenge (2 minutes) for the fingerprint key to sign.
+  Future<String> fingerprintChallenge(String keyId) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/api/auth/biometric/challenge/mobile',
+        data: {'keyId': keyId},
+      );
+      return response.data!['challenge'] as String;
+    } catch (e) {
+      throw ApiException.from(e);
+    }
+  }
+
+  Future<LoginTokens> loginWithFingerprint(String keyId, String signature) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/api/auth/login/biometric/mobile',
+        data: {'keyId': keyId, 'signature': signature},
+      );
+      final body = response.data!;
+      return (accessToken: body['accessToken'] as String, refreshToken: body['refreshToken'] as String);
+    } catch (e) {
+      throw ApiException.from(e);
+    }
+  }
+
+  Future<void> removeFingerprint(String keyId) async {
+    try {
+      await _dio.post<void>('/api/auth/biometric/remove/mobile', data: {'keyId': keyId});
+    } catch (e) {
+      throw ApiException.from(e);
+    }
+  }
+
   Future<UserProfile> me() async {
     try {
       final response = await _dio.get<Map<String, dynamic>>('/api/auth/me/mobile');

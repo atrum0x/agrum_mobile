@@ -46,6 +46,16 @@ class OfflineCredential {
     return !age.isNegative && age < period;
   }
 
+  /// The same password hash after another online login (a fingerprint login), which starts the
+  /// offline login period again.
+  OfflineCredential renewedAt(DateTime now) => OfflineCredential(
+        username: username,
+        salt: salt,
+        iterations: iterations,
+        hash: hash,
+        lastOnlineLoginAt: now.toUtc(),
+      );
+
   Map<String, dynamic> toJson() => {
         'username': username,
         'salt': salt,
