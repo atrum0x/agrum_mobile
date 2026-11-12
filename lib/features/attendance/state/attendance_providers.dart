@@ -62,11 +62,14 @@ final attendanceFormSourceProvider = FutureProvider.autoDispose<AttendanceFormSo
   // A Rejected row frees the worker to be marked again
   ref.watch(sendControllerProvider.select((s) => s.revision));
   final cache = ref.watch(setupCacheProvider);
+  final cacheInfo = await cache.info();
+  final today = attendanceDateOf(DateTime.now());
   return AttendanceFormSource(
-    cacheInfo: await cache.info(),
+    cacheInfo: cacheInfo,
     estates: await cache.estates(),
     workers: await cache.workers(),
-    markedToday: await ref.watch(attendanceStoreProvider).markedOn(attendanceDateOf(DateTime.now())),
+    markedToday: await ref.watch(attendanceStoreProvider).markedOn(today,
+        serverKnowsUntil: cacheInfo != null && cacheInfo.serverToday == today ? cacheInfo.refreshedAt : null),
   );
 });
 

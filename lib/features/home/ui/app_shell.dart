@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +9,7 @@ import '../../../app/window_app_bar.dart';
 import '../../auth/data/user_profile.dart';
 import '../../auth/state/auth_controller.dart';
 import '../../auth/ui/fingerprint_ui.dart';
+import '../../setup/state/setup_controller.dart';
 import 'notched_tab_bar.dart';
 
 /// A bottom tab; [branch] is its index in the router's StatefulShellRoute.
@@ -33,13 +36,31 @@ class AppTab {
 }
 
 /// Every window after login: the header (with send status), the window, and the tab bar (FSD 1.5).
-class AppShell extends ConsumerWidget {
+class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key, required this.shell});
 
   final StatefulNavigationShell shell;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends ConsumerState<AppShell> {
+  StatefulNavigationShell get shell => widget.shell;
+
+  @override
+  void didUpdateWidget(AppShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Opening Attendance or Weighing gets fresh site data, if it is a few minutes old
+    final index = widget.shell.currentIndex;
+    if (index != oldWidget.shell.currentIndex &&
+        (index == AppTab.attendance.branch || index == AppTab.weighing.branch)) {
+      unawaited(ref.read(setupControllerProvider.notifier).refreshIfStale());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
     if (auth is! LoggedIn) return const SizedBox.shrink();
     final tabs = AppTab.visibleFor(auth.session.profile);

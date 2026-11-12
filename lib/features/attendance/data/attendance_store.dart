@@ -49,14 +49,19 @@ class AttendanceStore {
 
   /// Stores the server's answer per record. Only Waiting rows change, so a late reply can't
   /// overwrite a newer one.
-  Future<void> applyResults(List<({String id, SyncStatus status, String? reason})> results) async {
+  Future<void> applyResults(List<({String id, SyncStatus status, String? reason})> results, {DateTime? now}) async {
     final db = await _db;
+    final answeredAt = (now ?? DateTime.now()).toUtc().toIso8601String();
     await db.transaction((txn) async {
       final batch = txn.batch();
       for (final r in results) {
         batch.update(
           'attendance_rows',
-          {'sync_status': r.status.code, 'reason': r.status == SyncStatus.rejected ? r.reason : null},
+          {
+            'sync_status': r.status.code,
+            'reason': r.status == SyncStatus.rejected ? r.reason : null,
+            'sent_at': r.status == SyncStatus.sent ? answeredAt : null,
+          },
           where: 'attendance_id = ? AND sync_status = ?',
           whereArgs: [r.id, SyncStatus.waiting.code],
         );
@@ -67,11 +72,18 @@ class AttendanceStore {
 
   /// Workers already marked on this phone for the date by anyone, so they can't be picked again
   /// before the server knows (AT-02). A Rejected row doesn't count: the worker can be marked again.
-  Future<Set<String>> markedOn(String date) async {
-    final rows = await (await _db).query('attendance_rows',
-        columns: ['employee_code'],
-        where: 'attendance_date = ? AND sync_status <> ?',
-        whereArgs: [date, SyncStatus.rejected.code]);
+  ///
+  /// [serverKnowsUntil] is when today's site data was downloaded. A row Sent before then is left to
+  /// the server's own attended list, so attendance deleted on the web frees the worker again.
+  Future<Set<String>> markedOn(String date, {DateTime? serverKnowsUntil}) async {
+    var where = 'attendance_date = ? AND sync_status <> ?';
+    final args = <Object>[date, SyncStatus.rejected.code];
+    if (serverKnowsUntil != null) {
+      // Both columns hold UTC ISO-8601 text, which sorts in time order
+      where += ' AND NOT (sync_status = ? AND COALESCE(sent_at, recorded_at) <= ?)';
+      args.addAll([SyncStatus.sent.code, serverKnowsUntil.toUtc().toIso8601String()]);
+    }
+    final rows = await (await _db).query('attendance_rows', columns: ['employee_code'], where: where, whereArgs: args);
     return {for (final r in rows) r['employee_code'] as String};
   }
 }

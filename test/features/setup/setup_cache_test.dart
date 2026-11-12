@@ -155,6 +155,11 @@ void main() {
                 weighed_at TEXT NOT NULL, weight_kg REAL NOT NULL, entry_type TEXT NOT NULL,
                 variance_percent REAL, provisional_sequence INTEGER NOT NULL, final_sequence INTEGER,
                 recorded_by TEXT NOT NULL, sync_status TEXT NOT NULL, reason TEXT)''');
+            await d.execute('''CREATE TABLE attendance_rows (attendance_id TEXT PRIMARY KEY,
+                employee_code TEXT NOT NULL, full_name TEXT NOT NULL, estate_id TEXT NOT NULL,
+                work_type TEXT NOT NULL, cp_code TEXT NOT NULL, category TEXT NOT NULL,
+                attendance_date TEXT NOT NULL, recorded_at TEXT NOT NULL, recorded_by TEXT NOT NULL,
+                sync_status TEXT NOT NULL, reason TEXT)''');
             await d.insert('meta', {'key': 'k', 'value': 'v'});
           },
         ));
@@ -164,6 +169,8 @@ void main() {
     final columns = (await upgraded.rawQuery('PRAGMA table_info(weight_rows)')).map((c) => c['name']);
     expect(columns, containsAll(['weigh_date', 'cp_code', 'work_type']));
     expect(await upgraded.query('cache_weighable'), isEmpty);
+    final attendanceColumns = (await upgraded.rawQuery('PRAGMA table_info(attendance_rows)')).map((c) => c['name']);
+    expect(attendanceColumns, contains('sent_at'));
     expect((await upgraded.query('meta')).single['value'], 'v');
     await upgraded.close();
     dir.deleteSync(recursive: true);

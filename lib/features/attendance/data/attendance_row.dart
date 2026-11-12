@@ -35,6 +35,7 @@ class AttendanceRow {
     required this.recordedBy,
     this.status = SyncStatus.waiting,
     this.reason,
+    this.sentAt,
   });
 
   /// UUID v4 made on the phone, so a resend is recognised (AT-12).
@@ -55,6 +56,9 @@ class AttendanceRow {
   /// The server's reason for a Rejected row.
   final String? reason;
 
+  /// When the server answered Sent; null while not Sent, or for rows sent before this was kept.
+  final DateTime? sentAt;
+
   factory AttendanceRow.fromRow(Map<String, Object?> row) => AttendanceRow(
         attendanceId: row['attendance_id'] as String,
         employeeCode: row['employee_code'] as String,
@@ -68,6 +72,7 @@ class AttendanceRow {
         recordedBy: row['recorded_by'] as String,
         status: SyncStatus.fromCode(row['sync_status'] as String),
         reason: row['reason'] as String?,
+        sentAt: DateTime.tryParse(row['sent_at'] as String? ?? ''),
       );
 
   Map<String, Object?> toRow() => {
@@ -83,5 +88,6 @@ class AttendanceRow {
         'recorded_by': recordedBy,
         'sync_status': status.code,
         'reason': reason,
+        'sent_at': sentAt?.toUtc().toIso8601String(),
       };
 }

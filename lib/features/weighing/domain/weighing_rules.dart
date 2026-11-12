@@ -86,7 +86,8 @@ class WeighableWorker {
 ///   with a weighing-required work type.
 ///
 /// Entries Today and the last number add this phone's weighings the server hadn't counted yet: those
-/// still Waiting, and those saved after the last refresh.
+/// still Waiting, and those sent after the last refresh. Rejected ones are never counted, so a
+/// rejected weighing frees its entry and can be recorded again (WE-04).
 List<WeighableWorker> weighableWorkers({
   required String today,
   required CacheInfo? cacheInfo,
@@ -122,10 +123,17 @@ List<WeighableWorker> weighableWorkers({
       if (wt.weighingRequired) (wt.estateId, wt.workType),
   };
   final cpNames = {for (final cp in collectionPoints) (cp.estateId, cp.cpCode): cp.name};
+  final serverListIsToday = cacheInfo != null && cacheInfo.serverToday == today;
   for (final a in localAttendance) {
     final estate = estatesById[a.estateId];
+    // The server had this row before today's list was downloaded, and the list doesn't have it:
+    // it was deleted (or moved off a weighing work type) on the web, so it can't be weighed
+    final droppedByServer = serverListIsToday &&
+        a.status == SyncStatus.sent &&
+        !(a.sentAt ?? a.recordedAt).isAfter(cacheInfo.refreshedAt);
     if (a.attendanceDate != today ||
         a.status == SyncStatus.rejected ||
+        droppedByServer ||
         byAttendance.containsKey(a.attendanceId) ||
         estate == null ||
         !weighingRequired.contains((a.estateId, a.workType))) {
@@ -152,7 +160,8 @@ List<WeighableWorker> weighableWorkers({
     final uncounted = w.status == SyncStatus.waiting ||
         cacheInfo == null ||
         cacheInfo.serverToday != today ||
-        w.weighedAt.isAfter(cacheInfo.refreshedAt);
+        // A row still Waiting at the download and sent later is not in the server's count yet
+        (w.sentAt ?? w.weighedAt).isAfter(cacheInfo.refreshedAt);
     byAttendance[w.attendanceId] =
         worker.withLocal(extraEntries: uncounted ? 1 : 0, lastLocalSequence: w.sequence);
   }

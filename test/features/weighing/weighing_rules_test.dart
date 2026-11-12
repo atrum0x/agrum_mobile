@@ -37,7 +37,8 @@ const fromServer = CachedWeighable(
   lastSequence: 1,
 );
 
-AttendanceRow attendance(String id, {String workType = 'PLUCKING', SyncStatus status = SyncStatus.waiting}) =>
+AttendanceRow attendance(String id,
+        {String workType = 'PLUCKING', SyncStatus status = SyncStatus.waiting, DateTime? sentAt}) =>
     AttendanceRow(
       attendanceId: id,
       employeeCode: 'E-$id',
@@ -50,10 +51,11 @@ AttendanceRow attendance(String id, {String workType = 'PLUCKING', SyncStatus st
       recordedAt: DateTime.utc(2026, 10, 24, 2),
       recordedBy: 'sup01',
       status: status,
+      sentAt: sentAt,
     );
 
 WeightRow weighing(String attendanceId, int sequence,
-        {SyncStatus status = SyncStatus.waiting, DateTime? at, int? finalSequence}) =>
+        {SyncStatus status = SyncStatus.waiting, DateTime? at, int? finalSequence, DateTime? sentAt}) =>
     WeightRow(
       weightId: 'w-$attendanceId-$sequence',
       attendanceId: attendanceId,
@@ -71,6 +73,7 @@ WeightRow weighing(String attendanceId, int sequence,
       finalSequence: finalSequence,
       recordedBy: 'sup01',
       status: status,
+      sentAt: sentAt,
     );
 
 List<WeighableWorker> build({
@@ -114,6 +117,26 @@ void main() {
       final workers = build(local: [attendance('srv-1')]);
       expect(workers.single.entriesToday, 1);
     });
+
+    test('a sent attendance missing from a later download was deleted on the web and is not listed', () {
+      // Cache downloaded at 03:00; a1 sent at 02:30, so the server list should have had it
+      final workers = build(local: [attendance('a1', status: SyncStatus.sent, sentAt: DateTime.utc(2026, 10, 24, 2, 30))]);
+      expect(workers.map((w) => w.attendanceId), ['srv-1']);
+    });
+
+    test('a row sent before sent_at was kept counts from when it was recorded', () {
+      final workers = build(local: [attendance('a1', status: SyncStatus.sent)]); // recorded 02:00
+      expect(workers.map((w) => w.attendanceId), ['srv-1']);
+    });
+
+    test('a sent attendance newer than the download is still listed until the next one', () {
+      final workers = build(local: [attendance('a1', status: SyncStatus.sent, sentAt: DateTime.utc(2026, 10, 24, 3, 5))]);
+      expect(workers.map((w) => w.attendanceId), ['a1', 'srv-1']);
+    });
+
+    test('a waiting attendance is listed even if the download does not have it', () {
+      expect(build(local: [attendance('a1')]).map((w) => w.attendanceId), ['a1', 'srv-1']);
+    });
   });
 
   group('Entries Today and the provisional number (WE-04, WE-10)', () {
@@ -133,6 +156,40 @@ void main() {
         weighing('srv-1', 1, status: SyncStatus.sent, at: DateTime.utc(2026, 10, 24, 2), finalSequence: 1),
       ]);
       expect(workers.single.entriesToday, 1);
+    });
+
+    test('a rejected 3rd weighing frees the entry: 2 of 3, and the next number is 3 again', () {
+      const three = CachedWeighable(
+        attendanceId: 'srv-1',
+        employeeCode: 'E002',
+        fullName: 'Sunil Silva',
+        estateId: 'S01',
+        estateName: 'Site One',
+        cpCode: 'CP9',
+        cpName: 'North',
+        workType: 'PLUCKING',
+        variancePercent: 2,
+        entriesToday: 2,
+        dailyLimit: 3,
+        lastSequence: 2,
+      );
+      final w = build(server: [three], weighings: [
+        weighing('srv-1', 1, status: SyncStatus.sent, at: DateTime.utc(2026, 10, 24, 1), finalSequence: 1),
+        weighing('srv-1', 2, status: SyncStatus.sent, at: DateTime.utc(2026, 10, 24, 2), finalSequence: 2),
+        weighing('srv-1', 3, status: SyncStatus.rejected),
+      ]).single;
+      expect((w.entriesToday, w.atLimit, w.nextSequence), (2, false, 3));
+    });
+
+    test('a weighing still Waiting at the refresh and sent after it is counted', () {
+      final w = build(weighings: [
+        weighing('srv-1', 2,
+            status: SyncStatus.sent,
+            at: DateTime.utc(2026, 10, 24, 2, 50),
+            sentAt: DateTime.utc(2026, 10, 24, 3, 10),
+            finalSequence: 2),
+      ]).single;
+      expect(w.entriesToday, 2);
     });
 
     test('a Sent weighing after the refresh is counted, with the server\'s number', () {

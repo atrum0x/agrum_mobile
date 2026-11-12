@@ -6,7 +6,7 @@ import 'package:sqflite/sqflite.dart';
 class AppDatabase {
   const AppDatabase._();
 
-  static const version = 4;
+  static const version = 5;
 
   static Future<Database> open({DatabaseFactory? factory, String? path}) async {
     final dbFactory = factory ?? databaseFactory;
@@ -20,11 +20,13 @@ class AppDatabase {
           await _upgradeToV2(db);
           await _upgradeToV3(db);
           await _upgradeToV4(db);
+          await _upgradeToV5(db);
         },
         onUpgrade: (db, from, _) async {
           if (from < 2) await _upgradeToV2(db);
           if (from < 3) await _upgradeToV3(db);
           if (from < 4) await _upgradeToV4(db);
+          if (from < 5) await _upgradeToV5(db);
         },
       ),
     );
@@ -154,6 +156,16 @@ class AppDatabase {
       ..execute('ALTER TABLE weight_rows ADD COLUMN face_similarity REAL')
       ..execute('ALTER TABLE weight_rows ADD COLUMN photo BLOB')
       ..execute('ALTER TABLE face_templates ADD COLUMN photo BLOB');
+    await batch.commit(noResult: true);
+  }
+
+  /// When a row was answered Sent, compared with when the site data was downloaded: an attendance
+  /// the later download no longer lists was deleted on the web, and a weighing sent after the
+  /// download is not in its Entries Today yet. Null for rows sent before this.
+  static Future<void> _upgradeToV5(Database db) async {
+    final batch = db.batch()
+      ..execute('ALTER TABLE attendance_rows ADD COLUMN sent_at TEXT')
+      ..execute('ALTER TABLE weight_rows ADD COLUMN sent_at TEXT');
     await batch.commit(noResult: true);
   }
 }

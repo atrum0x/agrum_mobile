@@ -47,6 +47,7 @@ class WeightRow {
     required this.recordedBy,
     this.status = SyncStatus.waiting,
     this.reason,
+    this.sentAt,
     this.identifiedBy,
     this.faceSimilarity,
     this.photo,
@@ -81,6 +82,9 @@ class WeightRow {
   /// The server's reason for a Rejected row.
   final String? reason;
 
+  /// When the server answered Sent; null while not Sent, or for rows sent before this was kept.
+  final DateTime? sentAt;
+
   final IdentifiedBy? identifiedBy;
 
   /// Face match score, 0-1, when picked by face.
@@ -109,6 +113,7 @@ class WeightRow {
         recordedBy: row['recorded_by'] as String,
         status: SyncStatus.fromCode(row['sync_status'] as String),
         reason: row['reason'] as String?,
+        sentAt: DateTime.tryParse(row['sent_at'] as String? ?? ''),
         identifiedBy: IdentifiedBy.fromCode(row['identified_by'] as String?),
         faceSimilarity: (row['face_similarity'] as num?)?.toDouble(),
         photo: row['photo'] as Uint8List?,
@@ -132,6 +137,7 @@ class WeightRow {
         'recorded_by': recordedBy,
         'sync_status': status.code,
         'reason': reason,
+        'sent_at': sentAt?.toUtc().toIso8601String(),
         'identified_by': identifiedBy?.code,
         'face_similarity': faceSimilarity,
         'photo': photo,

@@ -51,8 +51,9 @@ class WeightStore {
 
   /// Stores the server's answer per record; a Sent row takes the server's entry number. Only
   /// Waiting rows change, so a late reply can't overwrite a newer one.
-  Future<void> applyResults(List<WeightSyncResult> results) async {
+  Future<void> applyResults(List<WeightSyncResult> results, {DateTime? now}) async {
     final db = await _db;
+    final answeredAt = (now ?? DateTime.now()).toUtc().toIso8601String();
     await db.transaction((txn) async {
       final batch = txn.batch();
       for (final r in results) {
@@ -62,6 +63,7 @@ class WeightStore {
             'sync_status': r.status.code,
             'reason': r.status == SyncStatus.rejected ? r.reason : null,
             if (r.entrySequence != null) 'final_sequence': r.entrySequence,
+            if (r.status == SyncStatus.sent) 'sent_at': answeredAt,
             // The server has the photo now
             if (r.status == SyncStatus.sent) 'photo': null,
           },

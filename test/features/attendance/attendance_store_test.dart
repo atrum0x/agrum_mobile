@@ -61,4 +61,24 @@ void main() {
     ]);
     expect(await store.markedOn('2026-10-24'), {'E001', 'E002'});
   });
+
+  test('a Sent answer keeps when it was sent', () async {
+    await store.saveBatch([row('a1', 'E001'), row('a2', 'E002')]);
+    await store.applyResults([
+      (id: 'a1', status: SyncStatus.sent, reason: null),
+      (id: 'a2', status: SyncStatus.rejected, reason: 'No'),
+    ], now: DateTime.utc(2026, 10, 24, 2, 30));
+    final rows = {for (final r in await store.forDate('sup01', '2026-10-24')) r.attendanceId: r};
+    expect(rows['a1']!.sentAt, DateTime.utc(2026, 10, 24, 2, 30));
+    expect(rows['a2']!.sentAt, isNull);
+  });
+
+  test('rows sent before the download are left to the server list, so a web delete frees the worker', () async {
+    await store.saveBatch([row('a1', 'E001'), row('a2', 'E002'), row('a3', 'E003')]);
+    await store.applyResults([(id: 'a1', status: SyncStatus.sent, reason: null)], now: DateTime.utc(2026, 10, 24, 2, 30));
+    await store.applyResults([(id: 'a2', status: SyncStatus.sent, reason: null)], now: DateTime.utc(2026, 10, 24, 3, 30));
+    // a3 still Waiting
+    expect(await store.markedOn('2026-10-24', serverKnowsUntil: DateTime.utc(2026, 10, 24, 3)), {'E002', 'E003'});
+    expect(await store.markedOn('2026-10-24'), {'E001', 'E002', 'E003'});
+  });
 }

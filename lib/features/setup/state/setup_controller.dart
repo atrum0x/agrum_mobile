@@ -1,8 +1,10 @@
 import 'dart:async';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../../core/connectivity.dart';
 import '../../auth/state/auth_controller.dart';
 import '../../face/data/face_store.dart';
 import '../../face/data/face_sync_api.dart';
@@ -28,8 +30,22 @@ class SetupState {
 
 /// FSD 5.4: downloads the setup cache at login and after each successful send.
 class SetupController extends Notifier<SetupState> {
+  /// Site data older than this is downloaded again when a window opens, the app comes back,
+  /// or [_checkEvery] passes, so attendance deleted on the web leaves the weighing list.
+  static const staleAfter = Duration(minutes: 2);
+  static const _checkEvery = Duration(minutes: 5);
+
+  AppLifecycleListener? _lifecycle;
+  Timer? _timer;
+
   @override
   SetupState build() {
+    _lifecycle = AppLifecycleListener(onResume: () => unawaited(refreshIfStale()));
+    _timer = Timer.periodic(_checkEvery, (_) => unawaited(refreshIfStale()));
+    ref.onDispose(() {
+      _lifecycle?.dispose();
+      _timer?.cancel();
+    });
     ref.listen(authControllerProvider, (previous, next) {
       final wasOnline = previous is LoggedIn && !previous.session.offline;
       // A new login, or an offline session that has just logged in online
@@ -48,6 +64,17 @@ class SetupController extends Notifier<SetupState> {
   Future<void> _loadInfo() async {
     final info = await _cache.info();
     if (ref.mounted) state = SetupState(info: info, refreshing: state.refreshing, error: state.error);
+  }
+
+  /// Downloads the site data again when it is older than [staleAfter] and there is a connection.
+  /// Quiet: a failure only keeps the old cache.
+  Future<void> refreshIfStale({DateTime? now}) async {
+    final auth = ref.read(authControllerProvider);
+    if (auth is! LoggedIn || auth.session.offline || state.refreshing) return;
+    final refreshedAt = state.info?.refreshedAt;
+    if (refreshedAt != null && (now ?? DateTime.now()).difference(refreshedAt) < staleAfter) return;
+    if (!await ref.read(checkOnlineProvider)()) return;
+    if (ref.mounted) await refresh();
   }
 
   /// Returns why it failed, or null. A failure keeps the old cache.
