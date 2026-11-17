@@ -1,6 +1,14 @@
+import 'package:flutter/services.dart' show appFlavor;
+
 /// Build-time settings, passed with --dart-define.
 class AppConfig {
   const AppConfig._();
+
+  /// Which app this is: `dev`, `uat` or `prod`, from `--flavor` (android/app/build.gradle.kts).
+  static String get environment => appFlavor ?? 'dev';
+
+  /// The production app shows no environment badge.
+  static bool get isProduction => environment == 'prod';
 
   /// The Android emulator reaches the PC's localhost as 10.0.2.2; agrum_be runs on 8080.
   static const apiBaseUrl = String.fromEnvironment(

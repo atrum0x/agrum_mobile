@@ -1,23 +1,49 @@
-# Every merge to main: test, build a signed release APK and send it to Firebase App Distribution.
-# Testers in the "testers" group get an email and an update in the Firebase App Tester app.
-# One-time setup (secrets, keystore, Firebase project): see DISTRIBUTION.md.
+# Builds a signed release APK of one flavor and sends it to Firebase App Distribution.
+#   push to uat   -> the "Agrum UAT" app (flavor uat)
+#   push to main  -> the "Agrum" app     (flavor prod)
+#   Run workflow  -> uat or prod, picked by hand
+# (The dev flavor is only for local `flutter run`; CI never builds it.)
+# Each built flavor is a GitHub environment (uat / prod) with its own API_BASE_URL and
+# FIREBASE_APP_ID secrets. Testers in the "testers" group get the update in Firebase App Tester.
+# One-time setup (secrets, keystore, Firebase apps): see DISTRIBUTION.md.
 name: Distribute
 
 on:
   push:
-    branches: [main]
+    branches: [main, uat]
   workflow_dispatch:
+    inputs:
+      flavor:
+        description: Which app to build
+        type: choice
+        options: [uat, prod]
+        default: uat
 
 concurrency:
-  group: distribute
+  group: distribute-${{ github.event_name == 'workflow_dispatch' && inputs.flavor || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
   distribute:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Run workflow -> the chosen flavor; push to uat -> uat; push to main -> prod
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.flavor || (github.ref_name == 'uat' && 'uat' || 'prod') }}
+    env:
+      FLAVOR: ${{ github.event_name == 'workflow_dispatch' && inputs.flavor || (github.ref_name == 'uat' && 'uat' || 'prod') }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check the environment's secrets
+        env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+        run: |
+          if [ -z "$API_BASE_URL" ] || [ -z "$FIREBASE_APP_ID" ]; then
+            echo "::error::Set API_BASE_URL and FIREBASE_APP_ID in the '$FLAVOR' environment (Settings -> Environments). See DISTRIBUTION.md."
+            exit 1
+          fi
+          echo "Building the $FLAVOR app against $API_BASE_URL"
 
       - uses: actions/setup-java@v4
         with:
@@ -53,6 +79,7 @@ jobs:
       - name: Build APK
         run: >
           flutter build apk --release
+          --flavor ${{ env.FLAVOR }}
           --build-number=${{ github.run_number }}
           --dart-define=API_BASE_URL=${{ secrets.API_BASE_URL }}
 
@@ -65,7 +92,7 @@ jobs:
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
           git log -1 --pretty='%s%n%n%b' > "$RUNNER_TEMP/notes.txt"
           npx --yes firebase-tools appdistribution:distribute \
-            build/app/outputs/flutter-apk/app-release.apk \
+            "build/app/outputs/flutter-apk/app-$FLAVOR-release.apk" \
             --app "$FIREBASE_APP_ID" \
             --groups testers \
             --release-notes-file "$RUNNER_TEMP/notes.txt"
