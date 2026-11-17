@@ -39,6 +39,8 @@ dev_dependencies:
   sqflite_common_ffi: ^2.4.5
 
 flutter:
+  # Plain `flutter run` / `flutter test` use the dev app; CI picks uat or prod (see DISTRIBUTION.md)
+  default-flavor: dev
   uses-material-design: true
   assets:
     - assets/logo.png

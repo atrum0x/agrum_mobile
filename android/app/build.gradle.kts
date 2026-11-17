@@ -25,7 +25,8 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
+        // The prod app keeps the original id, so phones that already have the app keep their data.
+        // dev and uat add a suffix below, so all three can be installed side by side.
         applicationId = "com.atrum.agrum_mobile"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
@@ -35,6 +36,29 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+    }
+
+    // One app per backend: build with --flavor dev|uat|prod (pubspec default-flavor is dev).
+    // Each flavor is a separate app on the phone with its own name, data, login and fingerprint key.
+    // The backend URL still comes from --dart-define=API_BASE_URL (CI: the flavor's GitHub environment).
+    flavorDimensions += "env"
+    productFlavors {
+        // Local `flutter run` only (CI builds uat and prod), so a debug build never replaces the
+        // UAT app installed from Firebase
+        create("dev") {
+            dimension = "env"
+            applicationIdSuffix = ".dev"
+            manifestPlaceholders["appLabel"] = "Agrum DEV"
+        }
+        create("uat") {
+            dimension = "env"
+            applicationIdSuffix = ".uat"
+            manifestPlaceholders["appLabel"] = "Agrum UAT"
+        }
+        create("prod") {
+            dimension = "env"
+            manifestPlaceholders["appLabel"] = "Agrum"
+        }
     }
 
     signingConfigs {

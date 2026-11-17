@@ -238,7 +238,31 @@ class _Brand extends StatelessWidget {
         Text('Agrum', style: theme.textTheme.h2),
         const SizedBox(height: 4),
         Text('Field supervisor login', style: theme.textTheme.muted),
+        if (!AppConfig.isProduction) ...[const SizedBox(height: 12), const _EnvironmentBadge()],
       ],
+    );
+  }
+}
+
+/// Marks the DEV and UAT apps so test data is never entered in the wrong one. Hidden in prod.
+class _EnvironmentBadge extends StatelessWidget {
+  const _EnvironmentBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.pending.withValues(alpha: 0.12),
+          border: Border.all(color: AppColors.pending),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          '${AppConfig.environment.toUpperCase()} – test system',
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.foreground),
+        ),
+      ),
     );
   }
 }
