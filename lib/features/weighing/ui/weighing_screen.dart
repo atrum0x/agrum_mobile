@@ -23,7 +23,7 @@ final _time = DateFormat('HH:mm');
 final _date = DateFormat('dd/MM/yyyy');
 
 /// FSD 2.7 Enter Weight Management, phone screen. Shows only the 2.7 fields, in order (D-13, TC-48):
-/// scale status, worker search, worker name, site · collection point · work type, Entries Today,
+/// scale status, worker search, worker name, site · division · field · work type, Entries Today,
 /// the weight, Capture Weight / Manual Entry, Save, and the weighings waiting to send.
 ///
 /// The worker is picked by face from the camera, or by search when their face isn't registered.
@@ -378,7 +378,7 @@ class _WorkerPicker extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(w.fullName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                          Text('${w.employeeCode} · ${w.estateId} · ${w.cpCode}',
+                          Text('${w.employeeCode} · ${w.estateId} · ${w.divisionCode} · ${w.fieldCode}',
                               style: const TextStyle(fontSize: 12, color: AppColors.mutedForeground)),
                         ],
                       ),
@@ -393,7 +393,7 @@ class _WorkerPicker extends StatelessWidget {
   }
 }
 
-/// 2.7 items 3–5: worker name; site · collection point · work type; Entries Today.
+/// 2.7 items 3–5: worker name; site · division · field · work type; Entries Today.
 class _SelectedWorker extends StatelessWidget {
   const _SelectedWorker({required this.worker, required this.onChange});
 
@@ -402,7 +402,6 @@ class _SelectedWorker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cp = worker.cpName == null || worker.cpName!.isEmpty ? worker.cpCode : '${worker.cpCode} – ${worker.cpName}';
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
       decoration: BoxDecoration(
@@ -419,7 +418,7 @@ class _SelectedWorker extends StatelessWidget {
                 Text('${worker.fullName} (${worker.employeeCode})',
                     style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 2),
-                Text('${worker.estateId} · $cp · ${worker.workType}', style: _muted),
+                Text(worker.placeLine, style: _muted),
                 const SizedBox(height: 6),
                 Row(
                   children: [

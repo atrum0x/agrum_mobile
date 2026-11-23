@@ -73,11 +73,15 @@ final attendanceFormSourceProvider = FutureProvider.autoDispose<AttendanceFormSo
   );
 });
 
-typedef SiteLists = ({List<CachedWorkType> workTypes, List<CachedCollectionPoint> collectionPoints});
+typedef SiteLists = ({List<CachedWorkType> workTypes, List<CachedDivision> divisions, List<CachedField> fields});
 
 final siteListsProvider = FutureProvider.autoDispose.family<SiteLists, String>((ref, estateId) async {
   final cache = ref.watch(setupCacheProvider);
-  return (workTypes: await cache.workTypes(estateId), collectionPoints: await cache.collectionPoints(estateId));
+  return (
+    workTypes: await cache.workTypes(estateId),
+    divisions: await cache.divisions(estateId),
+    fields: await cache.fields(estateId),
+  );
 });
 
 /// Saves a checked batch on the phone, one Waiting row per worker (FSD 2.6 step 6).
@@ -90,7 +94,8 @@ class AttendanceRecorder {
   Future<void> record({
     required String estateId,
     required String workType,
-    required String cpCode,
+    required String divisionCode,
+    required String fieldCode,
     required List<BatchWorker> workers,
     DateTime? now,
   }) async {
@@ -105,7 +110,8 @@ class AttendanceRecorder {
           fullName: w.worker.fullName,
           estateId: estateId,
           workType: workType,
-          cpCode: cpCode,
+          divisionCode: divisionCode,
+          fieldCode: fieldCode,
           category: w.category!,
           attendanceDate: attendanceDateOf(recordedAt),
           recordedAt: recordedAt,

@@ -35,7 +35,8 @@ class WeightRow {
     required this.employeeCode,
     required this.fullName,
     required this.estateId,
-    required this.cpCode,
+    required this.divisionCode,
+    required this.fieldCode,
     required this.workType,
     required this.weighDate,
     required this.weighedAt,
@@ -59,7 +60,8 @@ class WeightRow {
   final String employeeCode;
   final String fullName;
   final String estateId;
-  final String? cpCode;
+  final String? divisionCode;
+  final String? fieldCode;
   final String? workType;
 
   /// The attendance date, yyyy-MM-dd.
@@ -101,7 +103,8 @@ class WeightRow {
         employeeCode: row['employee_code'] as String,
         fullName: row['full_name'] as String,
         estateId: row['estate_id'] as String,
-        cpCode: row['cp_code'] as String?,
+        divisionCode: row['division_code'] as String?,
+        fieldCode: row['field_code'] as String?,
         workType: row['work_type'] as String?,
         weighDate: row['weigh_date'] as String? ?? '',
         weighedAt: DateTime.parse(row['weighed_at'] as String),
@@ -125,7 +128,8 @@ class WeightRow {
         'employee_code': employeeCode,
         'full_name': fullName,
         'estate_id': estateId,
-        'cp_code': cpCode,
+        'division_code': divisionCode,
+        'field_code': fieldCode,
         'work_type': workType,
         'weigh_date': weighDate,
         'weighed_at': weighedAt.toUtc().toIso8601String(),

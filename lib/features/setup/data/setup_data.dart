@@ -6,7 +6,8 @@ class SetupData {
     required this.defaultEstateId,
     required this.estates,
     required this.workTypes,
-    required this.collectionPoints,
+    required this.divisions,
+    required this.fields,
     required this.workers,
     this.weighableToday = const [],
   });
@@ -17,7 +18,10 @@ class SetupData {
   final String? defaultEstateId;
   final List<CachedEstate> estates;
   final List<CachedWorkType> workTypes;
-  final List<CachedCollectionPoint> collectionPoints;
+  final List<CachedDivision> divisions;
+
+  /// Each field names its division (FSD v2.7: Site → Division → Field).
+  final List<CachedField> fields;
   final List<CachedWorker> workers;
 
   /// Today's attendance the server knows of that can be weighed (2.7).
@@ -32,7 +36,8 @@ class SetupData {
       defaultEstateId: json['defaultEstateId'] as String?,
       estates: list('estates').map(CachedEstate.fromJson).toList(),
       workTypes: list('workTypes').map(CachedWorkType.fromJson).toList(),
-      collectionPoints: list('collectionPoints').map(CachedCollectionPoint.fromJson).toList(),
+      divisions: list('divisions').map(CachedDivision.fromJson).toList(),
+      fields: list('fields').map(CachedField.fromJson).toList(),
       workers: list('workers')
           .map((w) => CachedWorker.fromJson(w, attendedToday: attended.contains(w['employeeCode'])))
           .toList(),
@@ -89,58 +94,119 @@ class CachedEstate {
       };
 }
 
+/// "CODE – text" for pickers and lines; the code alone when there is no text.
+String codeAndText(String code, String? text) =>
+    text == null || text.isEmpty || text == code ? code : '$code – $text';
+
+/// A site's work type: the Work Type ID (D-30) and its name.
 class CachedWorkType {
-  const CachedWorkType({required this.estateId, required this.workType, required this.weighingRequired});
+  const CachedWorkType({
+    required this.estateId,
+    required this.workTypeCode,
+    required this.name,
+    required this.weighingRequired,
+  });
 
   final String estateId;
-  final String workType;
+
+  /// The Work Type ID, sent with attendance as `workType`.
+  final String workTypeCode;
+  final String name;
   final bool weighingRequired;
+
+  String get label => codeAndText(workTypeCode, name);
 
   factory CachedWorkType.fromJson(Map<String, dynamic> json) => CachedWorkType(
         estateId: json['estateId'] as String,
-        workType: json['workType'] as String,
+        workTypeCode: json['workTypeCode'] as String,
+        name: json['name'] as String? ?? json['workTypeCode'] as String,
         weighingRequired: json['weighingRequired'] as bool? ?? false,
       );
 
   factory CachedWorkType.fromRow(Map<String, Object?> row) => CachedWorkType(
         estateId: row['estate_id'] as String,
-        workType: row['work_type'] as String,
+        workTypeCode: row['work_type_code'] as String,
+        name: row['name'] as String,
         weighingRequired: row['weighing_required'] == 1,
       );
 
   Map<String, Object?> toRow() => {
         'estate_id': estateId,
-        'work_type': workType,
+        'work_type_code': workTypeCode,
+        'name': name,
         'weighing_required': weighingRequired ? 1 : 0,
       };
 }
 
-class CachedCollectionPoint {
-  const CachedCollectionPoint({required this.estateId, required this.cpCode, this.name, required this.isDefault});
+/// A part of a site with its own fields (D-01).
+class CachedDivision {
+  const CachedDivision({required this.estateId, required this.divisionCode, required this.description});
 
   final String estateId;
-  final String cpCode;
-  final String? name;
+  final String divisionCode;
+  final String description;
+
+  String get label => codeAndText(divisionCode, description);
+
+  factory CachedDivision.fromJson(Map<String, dynamic> json) => CachedDivision(
+        estateId: json['estateId'] as String,
+        divisionCode: json['divisionCode'] as String,
+        description: json['description'] as String? ?? '',
+      );
+
+  factory CachedDivision.fromRow(Map<String, Object?> row) => CachedDivision(
+        estateId: row['estate_id'] as String,
+        divisionCode: row['division_code'] as String,
+        description: row['description'] as String,
+      );
+
+  Map<String, Object?> toRow() => {
+        'estate_id': estateId,
+        'division_code': divisionCode,
+        'description': description,
+      };
+}
+
+/// Where workers bring their tea for weighing (formerly "collection point"). At most one default
+/// per division (SB-10).
+class CachedField {
+  const CachedField({
+    required this.estateId,
+    required this.fieldCode,
+    required this.divisionCode,
+    required this.description,
+    required this.isDefault,
+  });
+
+  final String estateId;
+  final String fieldCode;
+  final String divisionCode;
+  final String description;
   final bool isDefault;
 
-  factory CachedCollectionPoint.fromJson(Map<String, dynamic> json) => CachedCollectionPoint(
+  String get label => codeAndText(fieldCode, description);
+
+  factory CachedField.fromJson(Map<String, dynamic> json) => CachedField(
         estateId: json['estateId'] as String,
-        cpCode: json['cpCode'] as String,
-        name: json['name'] as String?,
+        fieldCode: json['fieldCode'] as String,
+        divisionCode: json['divisionCode'] as String,
+        description: json['description'] as String? ?? '',
         isDefault: json['isDefault'] as bool? ?? false,
       );
 
-  factory CachedCollectionPoint.fromRow(Map<String, Object?> row) => CachedCollectionPoint(
+  factory CachedField.fromRow(Map<String, Object?> row) => CachedField(
         estateId: row['estate_id'] as String,
-        cpCode: row['cp_code'] as String,
-        name: row['name'] as String?,
+        fieldCode: row['field_code'] as String,
+        divisionCode: row['division_code'] as String,
+        description: row['description'] as String,
         isDefault: row['is_default'] == 1,
       );
 
   Map<String, Object?> toRow() => {
         'estate_id': estateId,
-        'cp_code': cpCode,
-        'name': name,
+        'field_code': fieldCode,
+        'division_code': divisionCode,
+        'description': description,
         'is_default': isDefault ? 1 : 0,
       };
 }
@@ -152,7 +218,8 @@ class CachedWorker {
     required this.fullName,
     this.defaultEstateId,
     this.homeEstateId,
-    this.defaultCpCode,
+    this.defaultDivisionCode,
+    this.defaultFieldCode,
     this.defaultCategory,
     required this.attendedToday,
   });
@@ -161,7 +228,8 @@ class CachedWorker {
   final String fullName;
   final String? defaultEstateId;
   final String? homeEstateId;
-  final String? defaultCpCode;
+  final String? defaultDivisionCode;
+  final String? defaultFieldCode;
 
   /// REGULAR, SEASONAL, LENT or BORROWED; null when the employee has none.
   final String? defaultCategory;
@@ -174,7 +242,8 @@ class CachedWorker {
         fullName: json['fullName'] as String,
         defaultEstateId: json['defaultEstateId'] as String?,
         homeEstateId: json['homeEstateId'] as String?,
-        defaultCpCode: json['defaultCpCode'] as String?,
+        defaultDivisionCode: json['defaultDivisionCode'] as String?,
+        defaultFieldCode: json['defaultFieldCode'] as String?,
         defaultCategory: json['defaultCategory'] as String?,
         attendedToday: attendedToday,
       );
@@ -184,7 +253,8 @@ class CachedWorker {
         fullName: row['full_name'] as String,
         defaultEstateId: row['default_estate_id'] as String?,
         homeEstateId: row['home_estate_id'] as String?,
-        defaultCpCode: row['default_cp_code'] as String?,
+        defaultDivisionCode: row['default_division_code'] as String?,
+        defaultFieldCode: row['default_field_code'] as String?,
         defaultCategory: row['default_category'] as String?,
         attendedToday: row['attended_today'] == 1,
       );
@@ -194,7 +264,8 @@ class CachedWorker {
         'full_name': fullName,
         'default_estate_id': defaultEstateId,
         'home_estate_id': homeEstateId,
-        'default_cp_code': defaultCpCode,
+        'default_division_code': defaultDivisionCode,
+        'default_field_code': defaultFieldCode,
         'default_category': defaultCategory,
         'attended_today': attendedToday ? 1 : 0,
       };
@@ -209,9 +280,12 @@ class CachedWeighable {
     required this.fullName,
     required this.estateId,
     required this.estateName,
-    required this.cpCode,
-    this.cpName,
+    required this.divisionCode,
+    this.divisionDescription,
+    required this.fieldCode,
+    this.fieldDescription,
     required this.workType,
+    this.workTypeName,
     required this.variancePercent,
     required this.entriesToday,
     required this.dailyLimit,
@@ -223,9 +297,14 @@ class CachedWeighable {
   final String fullName;
   final String estateId;
   final String estateName;
-  final String cpCode;
-  final String? cpName;
+  final String divisionCode;
+  final String? divisionDescription;
+  final String fieldCode;
+  final String? fieldDescription;
+
+  /// The Work Type ID.
   final String workType;
+  final String? workTypeName;
   final double variancePercent;
 
   /// Not counting cancelled weighings (WE-04).
@@ -241,9 +320,12 @@ class CachedWeighable {
         fullName: json['fullName'] as String,
         estateId: json['estateId'] as String,
         estateName: json['estateName'] as String,
-        cpCode: json['cpCode'] as String,
-        cpName: json['cpName'] as String?,
+        divisionCode: json['divisionCode'] as String,
+        divisionDescription: json['divisionDescription'] as String?,
+        fieldCode: json['fieldCode'] as String,
+        fieldDescription: json['fieldDescription'] as String?,
         workType: json['workType'] as String,
+        workTypeName: json['workTypeName'] as String?,
         variancePercent: _decimal(json['variancePercent']) ?? 0,
         entriesToday: json['entriesToday'] as int,
         dailyLimit: json['dailyLimit'] as int,
@@ -256,9 +338,12 @@ class CachedWeighable {
         fullName: row['full_name'] as String,
         estateId: row['estate_id'] as String,
         estateName: row['estate_name'] as String,
-        cpCode: row['cp_code'] as String,
-        cpName: row['cp_name'] as String?,
+        divisionCode: row['division_code'] as String,
+        divisionDescription: row['division_description'] as String?,
+        fieldCode: row['field_code'] as String,
+        fieldDescription: row['field_description'] as String?,
         workType: row['work_type'] as String,
+        workTypeName: row['work_type_name'] as String?,
         variancePercent: (row['variance_percent'] as num).toDouble(),
         entriesToday: row['entries_today'] as int,
         dailyLimit: row['daily_limit'] as int,
@@ -271,9 +356,12 @@ class CachedWeighable {
         'full_name': fullName,
         'estate_id': estateId,
         'estate_name': estateName,
-        'cp_code': cpCode,
-        'cp_name': cpName,
+        'division_code': divisionCode,
+        'division_description': divisionDescription,
+        'field_code': fieldCode,
+        'field_description': fieldDescription,
         'work_type': workType,
+        'work_type_name': workTypeName,
         'variance_percent': variancePercent,
         'entries_today': entriesToday,
         'daily_limit': dailyLimit,

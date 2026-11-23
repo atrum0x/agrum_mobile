@@ -4,7 +4,7 @@ import '../../setup/data/setup_cache.dart';
 import '../../setup/data/setup_data.dart';
 import '../data/attendance_row.dart';
 
-/// FSD 2.6 messages the phone shows itself. The server checks the same rules again.
+/// FSD 2.6 (v2.7) messages the phone shows itself. The server checks the same rules again.
 class AttendanceMessages {
   const AttendanceMessages._();
 
@@ -14,9 +14,10 @@ class AttendanceMessages {
   static String otherSite(String worker) => 'You are not permitted to record $worker at a different site.'; // AT-06
   static const workType = 'Please select a Work Type.'; // AT-07
   static const category = 'Please select the Attendance Category.'; // AT-08
-  static const collectionPoint = 'Please select the Collection Point.'; // AT-09
+  static const field = 'Please select the Field.'; // AT-09
   static const siteSetup = 'Site setup is incomplete. Please contact the administrator.'; // AT-10
   static const todayOnly = 'Attendance can only be recorded for today. Please check the phone date.'; // AT-11
+  static const division = 'Please select the Division.'; // AT-19
 
   static const noSiteData = 'Site data is not on this phone yet. Connect to the internet and tap Send Now.';
 
@@ -43,18 +44,32 @@ class BatchWorker {
   final AttendanceCategory? category;
 }
 
-/// The batch's collection point: the one all ticked workers share as their personal default,
-/// else the site's default (FSD 2.6).
-String? defaultCollectionPoint(List<CachedCollectionPoint> siteCollectionPoints, Iterable<CachedWorker> workers) {
-  final shared = workers.map((w) => w.defaultCpCode).toSet();
-  if (shared.length == 1 && shared.single != null && siteCollectionPoints.any((cp) => cp.cpCode == shared.single)) {
+/// The batch's division: the Default Division all ticked workers share, else the site's only
+/// division (FSD 2.6 B.1).
+String? defaultDivision(List<CachedDivision> siteDivisions, Iterable<CachedWorker> workers) {
+  final shared = workers.map((w) => w.defaultDivisionCode).toSet();
+  if (shared.length == 1 && shared.single != null && siteDivisions.any((d) => d.divisionCode == shared.single)) {
     return shared.single;
   }
-  for (final cp in siteCollectionPoints) {
-    if (cp.isDefault) return cp.cpCode;
+  return siteDivisions.length == 1 ? siteDivisions.single.divisionCode : null;
+}
+
+/// The batch's field, from the selected division's fields: the Default Field all ticked workers
+/// share, else the division's default field (FSD 2.6 B.1).
+String? defaultField(List<CachedField> divisionFields, Iterable<CachedWorker> workers) {
+  final shared = workers.map((w) => w.defaultFieldCode).toSet();
+  if (shared.length == 1 && shared.single != null && divisionFields.any((f) => f.fieldCode == shared.single)) {
+    return shared.single;
+  }
+  for (final f in divisionFields) {
+    if (f.isDefault) return f.fieldCode;
   }
   return null;
 }
+
+/// The fields of one division.
+List<CachedField> fieldsOf(List<CachedField> siteFields, String? divisionCode) =>
+    siteFields.where((f) => divisionCode != null && f.divisionCode == divisionCode).toList();
 
 /// The phone-side checks before the confirm dialog; returns the first problem, or null.
 String? validateBatch({
@@ -62,9 +77,11 @@ String? validateBatch({
   required CacheInfo? cacheInfo,
   required CachedEstate? site,
   required List<CachedWorkType> siteWorkTypes,
-  required List<CachedCollectionPoint> siteCollectionPoints,
+  required List<CachedDivision> siteDivisions,
+  required List<CachedField> siteFields,
   required String? workType,
-  required String? cpCode,
+  required String? divisionCode,
+  required String? fieldCode,
   required List<BatchWorker> workers,
   required Set<String> markedToday,
   required bool canRecordOtherSite,
@@ -75,10 +92,15 @@ String? validateBatch({
     return AttendanceMessages.todayOnly;
   }
   if (site == null) return AttendanceMessages.siteNotAllowed; // AT-05
-  if (siteWorkTypes.isEmpty || siteCollectionPoints.isEmpty) return AttendanceMessages.siteSetup; // AT-10
-  if (workType == null || !siteWorkTypes.any((wt) => wt.workType == workType)) return AttendanceMessages.workType; // AT-07
-  if (cpCode == null || !siteCollectionPoints.any((cp) => cp.cpCode == cpCode)) {
-    return AttendanceMessages.collectionPoint; // AT-09
+  if (siteWorkTypes.isEmpty || siteDivisions.isEmpty || siteFields.isEmpty) return AttendanceMessages.siteSetup; // AT-10
+  if (workType == null || !siteWorkTypes.any((wt) => wt.workTypeCode == workType)) {
+    return AttendanceMessages.workType; // AT-07
+  }
+  if (divisionCode == null || !siteDivisions.any((d) => d.divisionCode == divisionCode)) {
+    return AttendanceMessages.division; // AT-19
+  }
+  if (fieldCode == null || !fieldsOf(siteFields, divisionCode).any((f) => f.fieldCode == fieldCode)) {
+    return AttendanceMessages.field; // AT-09: a field of the selected division
   }
   if (workers.isEmpty) return AttendanceMessages.noWorkers; // AT-01
   for (final w in workers) {

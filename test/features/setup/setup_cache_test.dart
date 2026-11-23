@@ -24,12 +24,17 @@ Map<String, dynamic> setupJson({List<String> attendedToday = const ['E002']}) =>
         },
       ],
       'workTypes': [
-        {'estateId': 'S01', 'workType': 'PRUNING', 'weighingRequired': false},
-        {'estateId': 'S01', 'workType': 'PLUCKING', 'weighingRequired': true},
+        {'estateId': 'S01', 'workTypeCode': 'PRUNING', 'name': 'Pruning', 'weighingRequired': false},
+        {'estateId': 'S01', 'workTypeCode': 'PLUCKING', 'name': 'Plucking', 'weighingRequired': true},
       ],
-      'collectionPoints': [
-        {'estateId': 'S01', 'cpCode': 'CP2', 'name': 'South', 'isDefault': false},
-        {'estateId': 'S01', 'cpCode': 'CP9', 'name': 'North', 'isDefault': true},
+      'divisions': [
+        {'estateId': 'S01', 'divisionCode': 'D2', 'description': 'South'},
+        {'estateId': 'S01', 'divisionCode': 'D1', 'description': 'North'},
+      ],
+      'fields': [
+        {'estateId': 'S01', 'fieldCode': 'CP2', 'divisionCode': 'D1', 'description': 'Hill', 'isDefault': false},
+        {'estateId': 'S01', 'fieldCode': 'CP9', 'divisionCode': 'D1', 'description': 'North', 'isDefault': true},
+        {'estateId': 'S01', 'fieldCode': 'CP5', 'divisionCode': 'D2', 'description': 'River', 'isDefault': true},
       ],
       'workers': [
         {
@@ -37,7 +42,8 @@ Map<String, dynamic> setupJson({List<String> attendedToday = const ['E002']}) =>
           'fullName': 'Kamala Perera',
           'defaultEstateId': 'S02',
           'homeEstateId': 'S02',
-          'defaultCpCode': null,
+          'defaultDivisionCode': 'D1',
+          'defaultFieldCode': 'CP2',
           'defaultCategory': 'REGULAR',
         },
         {'employeeCode': 'E002', 'fullName': 'Sunil Silva', 'defaultEstateId': 'S01'},
@@ -50,9 +56,12 @@ Map<String, dynamic> setupJson({List<String> attendedToday = const ['E002']}) =>
           'attendanceId': '6f1c2a3e-0000-4000-8000-000000000001',
           'estateId': 'S01',
           'estateName': 'Site One',
-          'cpCode': 'CP9',
-          'cpName': 'North',
+          'divisionCode': 'D1',
+          'divisionDescription': 'North',
+          'fieldCode': 'CP9',
+          'fieldDescription': 'North',
           'workType': 'PLUCKING',
+          'workTypeName': 'Plucking',
           'variancePercent': 2.00,
           'entriesToday': 1,
           'dailyLimit': 2,
@@ -104,26 +113,31 @@ void main() {
     expect(estate.variancePercent, 2.0);
     expect(estate.maxDailyTransactions, 2);
 
-    expect((await cache.workTypes('S01')).map((w) => (w.workType, w.weighingRequired)),
-        [('PLUCKING', true), ('PRUNING', false)]);
-    // Default collection point first
-    expect((await cache.collectionPoints('S01')).map((c) => c.cpCode), ['CP9', 'CP2']);
-    expect(await cache.collectionPoints('S02'), isEmpty);
+    expect((await cache.workTypes('S01')).map((w) => (w.workTypeCode, w.name, w.weighingRequired)),
+        [('PLUCKING', 'Plucking', true), ('PRUNING', 'Pruning', false)]);
+    expect((await cache.divisions('S01')).map((d) => d.label), ['D1 – North', 'D2 – South']);
+    // By division, each division's default first
+    expect((await cache.fields('S01')).map((f) => (f.divisionCode, f.fieldCode)),
+        [('D1', 'CP9'), ('D1', 'CP2'), ('D2', 'CP5')]);
+    expect(await cache.fields('S02'), isEmpty);
 
     // Workers from other sites are kept; those already marked today are hidden by default (AT-02)
     final workers = await cache.workers();
     expect(workers.map((w) => w.employeeCode), ['E001']);
     expect(workers.single.defaultEstateId, 'S02');
     expect(workers.single.defaultCategory, 'REGULAR');
+    expect((workers.single.defaultDivisionCode, workers.single.defaultFieldCode), ('D1', 'CP2'));
     expect((await cache.workers(includeAttended: true)).length, 2);
 
     // Today's weighable attendance for the weighing screen (2.7)
     final weighable = (await cache.weighable()).single;
-    expect((weighable.employeeCode, weighable.cpName, weighable.entriesToday, weighable.lastSequence),
-        ('E002', 'North', 1, 1));
+    expect((weighable.employeeCode, weighable.divisionCode, weighable.fieldCode, weighable.workTypeName),
+        ('E002', 'D1', 'CP9', 'Plucking'));
+    expect((weighable.entriesToday, weighable.lastSequence), (1, 1));
     expect(weighable.variancePercent, 2.0);
     expect((await cache.allWorkTypes()).length, 2);
-    expect((await cache.allCollectionPoints()).length, 2);
+    expect((await cache.allDivisions()).length, 2);
+    expect((await cache.allFields()).length, 3);
   });
 
   test('a refresh replaces the old data', () async {
@@ -161,17 +175,42 @@ void main() {
                 attendance_date TEXT NOT NULL, recorded_at TEXT NOT NULL, recorded_by TEXT NOT NULL,
                 sync_status TEXT NOT NULL, reason TEXT)''');
             await d.insert('meta', {'key': 'k', 'value': 'v'});
+            for (final (id, status) in [('a1', 'SENT'), ('a2', 'WAITING')]) {
+              await d.insert('attendance_rows', {
+                'attendance_id': id,
+                'employee_code': 'E001',
+                'full_name': 'Kamala Perera',
+                'estate_id': 'S01',
+                'work_type': 'PLUCKING',
+                'cp_code': 'CP9',
+                'category': 'REGULAR',
+                'attendance_date': '2026-10-24',
+                'recorded_at': '2026-10-24T02:00:00Z',
+                'recorded_by': 'sup01',
+                'sync_status': status,
+              });
+            }
           },
         ));
     await v1.close();
 
     final upgraded = await AppDatabase.open(factory: databaseFactoryFfi, path: path);
     final columns = (await upgraded.rawQuery('PRAGMA table_info(weight_rows)')).map((c) => c['name']);
-    expect(columns, containsAll(['weigh_date', 'cp_code', 'work_type']));
+    expect(columns, containsAll(['weigh_date', 'division_code', 'field_code', 'work_type', 'sent_at']));
+    expect(columns, isNot(contains('cp_code')));
     expect(await upgraded.query('cache_weighable'), isEmpty);
+    expect(await upgraded.query('cache_fields'), isEmpty);
     final attendanceColumns = (await upgraded.rawQuery('PRAGMA table_info(attendance_rows)')).map((c) => c['name']);
-    expect(attendanceColumns, contains('sent_at'));
+    expect(attendanceColumns, containsAll(['sent_at', 'division_code', 'field_code']));
+    expect(attendanceColumns, isNot(contains('cp_code')));
     expect((await upgraded.query('meta')).single['value'], 'v');
+
+    // FSD v2.7: the field code is kept; unsent attendance has no division (AT-19), so it is Rejected
+    final rows = await upgraded.query('attendance_rows', orderBy: 'rowid');
+    expect(rows.map((r) => (r['attendance_id'], r['field_code'], r['sync_status'])),
+        [('a1', 'CP9', 'SENT'), ('a2', 'CP9', 'REJECTED')]);
+    expect(rows.last['reason'], AppDatabase.recordAgainReason);
+    expect(rows.first['reason'], isNull);
     await upgraded.close();
     dir.deleteSync(recursive: true);
   });
@@ -184,7 +223,8 @@ void main() {
           'full_name': 'Kamala Perera',
           'estate_id': 'S01',
           'work_type': 'PLUCKING',
-          'cp_code': 'CP9',
+          'division_code': 'D1',
+          'field_code': 'CP9',
           'category': 'REGULAR',
           'attendance_date': '2026-10-24',
           'recorded_at': '2026-10-24T02:00:00Z',
