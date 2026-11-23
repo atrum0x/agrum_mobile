@@ -17,10 +17,13 @@ CacheInfo cacheInfo({String serverToday = today, DateTime? refreshedAt}) => Cach
 
 const estates = [CachedEstate(id: 'S01', name: 'Site One', variancePercent: 2, maxDailyTransactions: 2)];
 const workTypes = [
-  CachedWorkType(estateId: 'S01', workType: 'PLUCKING', weighingRequired: true),
-  CachedWorkType(estateId: 'S01', workType: 'PRUNING', weighingRequired: false),
+  CachedWorkType(estateId: 'S01', workTypeCode: 'PLUCKING', name: 'Plucking', weighingRequired: true),
+  CachedWorkType(estateId: 'S01', workTypeCode: 'PRUNING', name: 'Pruning', weighingRequired: false),
 ];
-const collectionPoints = [CachedCollectionPoint(estateId: 'S01', cpCode: 'CP9', name: 'North', isDefault: true)];
+const divisions = [CachedDivision(estateId: 'S01', divisionCode: 'D1', description: 'North')];
+const fields = [
+  CachedField(estateId: 'S01', fieldCode: 'CP9', divisionCode: 'D1', description: 'North', isDefault: true),
+];
 
 const fromServer = CachedWeighable(
   attendanceId: 'srv-1',
@@ -28,9 +31,12 @@ const fromServer = CachedWeighable(
   fullName: 'Sunil Silva',
   estateId: 'S01',
   estateName: 'Site One',
-  cpCode: 'CP9',
-  cpName: 'North',
+  divisionCode: 'D1',
+  fieldCode: 'CP9',
+  divisionDescription: 'North',
+  fieldDescription: 'North',
   workType: 'PLUCKING',
+  workTypeName: 'Plucking',
   variancePercent: 2,
   entriesToday: 1,
   dailyLimit: 2,
@@ -45,7 +51,8 @@ AttendanceRow attendance(String id,
       fullName: 'Worker $id',
       estateId: 'S01',
       workType: workType,
-      cpCode: 'CP9',
+      divisionCode: 'D1',
+      fieldCode: 'CP9',
       category: AttendanceCategory.regular,
       attendanceDate: today,
       recordedAt: DateTime.utc(2026, 10, 24, 2),
@@ -62,7 +69,8 @@ WeightRow weighing(String attendanceId, int sequence,
       employeeCode: 'E',
       fullName: 'W',
       estateId: 'S01',
-      cpCode: 'CP9',
+      divisionCode: 'D1',
+      fieldCode: 'CP9',
       workType: 'PLUCKING',
       weighDate: today,
       weighedAt: at ?? DateTime.utc(2026, 10, 24, 4),
@@ -89,7 +97,8 @@ List<WeighableWorker> build({
       localAttendance: local,
       estates: estates,
       workTypes: workTypes,
-      collectionPoints: collectionPoints,
+      divisions: divisions,
+      fields: fields,
       localWeighings: weighings,
     );
 
@@ -105,7 +114,8 @@ void main() {
       expect(workers.map((w) => w.attendanceId), ['a1', 'srv-1']); // by EMP No
       final a1 = workers.first;
       expect((a1.entriesToday, a1.dailyLimit, a1.nextSequence), (0, 2, 1));
-      expect(a1.cpName, 'North');
+      expect((a1.divisionCode, a1.fieldDescription, a1.workTypeName), ('D1', 'North', 'Plucking'));
+      expect(a1.placeLine, 'S01 · D1 – North · CP9 – North · Plucking');
       expect(a1.variancePercent, 2);
     });
 
@@ -165,9 +175,12 @@ void main() {
         fullName: 'Sunil Silva',
         estateId: 'S01',
         estateName: 'Site One',
-        cpCode: 'CP9',
-        cpName: 'North',
+        divisionCode: 'D1',
+        fieldCode: 'CP9',
+        divisionDescription: 'North',
+        fieldDescription: 'North',
         workType: 'PLUCKING',
+        workTypeName: 'Plucking',
         variancePercent: 2,
         entriesToday: 2,
         dailyLimit: 3,

@@ -28,7 +28,8 @@ class AttendanceRow {
     required this.fullName,
     required this.estateId,
     required this.workType,
-    required this.cpCode,
+    required this.divisionCode,
+    required this.fieldCode,
     required this.category,
     required this.attendanceDate,
     required this.recordedAt,
@@ -43,8 +44,12 @@ class AttendanceRow {
   final String employeeCode;
   final String fullName;
   final String estateId;
+  /// The Work Type ID.
   final String workType;
-  final String cpCode;
+
+  /// Null only on rows saved before divisions (FSD v2.7), which were marked Rejected.
+  final String? divisionCode;
+  final String fieldCode;
   final AttendanceCategory category;
 
   /// yyyy-MM-dd
@@ -65,7 +70,8 @@ class AttendanceRow {
         fullName: row['full_name'] as String,
         estateId: row['estate_id'] as String,
         workType: row['work_type'] as String,
-        cpCode: row['cp_code'] as String,
+        divisionCode: row['division_code'] as String?,
+        fieldCode: row['field_code'] as String,
         category: AttendanceCategory.fromCode(row['category'] as String) ?? AttendanceCategory.regular,
         attendanceDate: row['attendance_date'] as String,
         recordedAt: DateTime.parse(row['recorded_at'] as String),
@@ -81,7 +87,8 @@ class AttendanceRow {
         'full_name': fullName,
         'estate_id': estateId,
         'work_type': workType,
-        'cp_code': cpCode,
+        'division_code': divisionCode,
+        'field_code': fieldCode,
         'category': category.code,
         'attendance_date': attendanceDate,
         'recorded_at': recordedAt.toUtc().toIso8601String(),

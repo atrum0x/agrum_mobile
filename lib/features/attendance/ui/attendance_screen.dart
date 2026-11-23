@@ -117,7 +117,7 @@ class _AttendanceTile extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(
-            '${row.estateId} · ${row.workType} · ${row.cpCode} · ${row.category.label} · '
+            '${row.estateId} · ${row.workType} · ${[?row.divisionCode, row.fieldCode].join(' / ')} · ${row.category.label} · '
             '${showDate ? '${_date.format(recorded)} ' : ''}${_time.format(recorded)}',
             style: theme.textTheme.muted,
           ),

@@ -38,9 +38,12 @@ class WeighableWorker {
     required this.employeeCode,
     required this.fullName,
     required this.estateId,
-    required this.cpCode,
-    this.cpName,
+    required this.divisionCode,
+    this.divisionDescription,
+    required this.fieldCode,
+    this.fieldDescription,
     required this.workType,
+    this.workTypeName,
     required this.variancePercent,
     required this.entriesToday,
     required this.dailyLimit,
@@ -51,13 +54,26 @@ class WeighableWorker {
   final String employeeCode;
   final String fullName;
   final String estateId;
-  final String cpCode;
-  final String? cpName;
+  final String divisionCode;
+  final String? divisionDescription;
+  final String fieldCode;
+  final String? fieldDescription;
+
+  /// The Work Type ID.
   final String workType;
+  final String? workTypeName;
   final double variancePercent;
   final int entriesToday;
   final int dailyLimit;
   final int lastSequence;
+
+  /// FSD 2.7 item 4, the one short line: Site · Division · Field · Work Type.
+  String get placeLine => [
+        estateId,
+        codeAndText(divisionCode, divisionDescription),
+        codeAndText(fieldCode, fieldDescription),
+        workTypeName == null || workTypeName!.isEmpty ? workType : workTypeName!,
+      ].join(' · ');
 
   /// WE-04
   bool get atLimit => entriesToday >= dailyLimit;
@@ -70,9 +86,12 @@ class WeighableWorker {
         employeeCode: employeeCode,
         fullName: fullName,
         estateId: estateId,
-        cpCode: cpCode,
-        cpName: cpName,
+        divisionCode: divisionCode,
+        divisionDescription: divisionDescription,
+        fieldCode: fieldCode,
+        fieldDescription: fieldDescription,
         workType: workType,
+        workTypeName: workTypeName,
         variancePercent: variancePercent,
         entriesToday: entriesToday + extraEntries,
         dailyLimit: dailyLimit,
@@ -95,7 +114,8 @@ List<WeighableWorker> weighableWorkers({
   required List<AttendanceRow> localAttendance,
   required List<CachedEstate> estates,
   required List<CachedWorkType> workTypes,
-  required List<CachedCollectionPoint> collectionPoints,
+  required List<CachedDivision> divisions,
+  required List<CachedField> fields,
   required List<WeightRow> localWeighings,
 }) {
   final byAttendance = <String, WeighableWorker>{};
@@ -106,9 +126,12 @@ List<WeighableWorker> weighableWorkers({
         employeeCode: w.employeeCode,
         fullName: w.fullName,
         estateId: w.estateId,
-        cpCode: w.cpCode,
-        cpName: w.cpName,
+        divisionCode: w.divisionCode,
+        divisionDescription: w.divisionDescription,
+        fieldCode: w.fieldCode,
+        fieldDescription: w.fieldDescription,
         workType: w.workType,
+        workTypeName: w.workTypeName,
         variancePercent: w.variancePercent,
         entriesToday: w.entriesToday,
         dailyLimit: w.dailyLimit,
@@ -120,9 +143,11 @@ List<WeighableWorker> weighableWorkers({
   final estatesById = {for (final e in estates) e.id: e};
   final weighingRequired = {
     for (final wt in workTypes)
-      if (wt.weighingRequired) (wt.estateId, wt.workType),
+      if (wt.weighingRequired) (wt.estateId, wt.workTypeCode),
   };
-  final cpNames = {for (final cp in collectionPoints) (cp.estateId, cp.cpCode): cp.name};
+  final workTypeNames = {for (final wt in workTypes) (wt.estateId, wt.workTypeCode): wt.name};
+  final divisionNames = {for (final d in divisions) (d.estateId, d.divisionCode): d.description};
+  final fieldNames = {for (final f in fields) (f.estateId, f.fieldCode): f.description};
   final serverListIsToday = cacheInfo != null && cacheInfo.serverToday == today;
   for (final a in localAttendance) {
     final estate = estatesById[a.estateId];
@@ -136,6 +161,7 @@ List<WeighableWorker> weighableWorkers({
         droppedByServer ||
         byAttendance.containsKey(a.attendanceId) ||
         estate == null ||
+        a.divisionCode == null ||
         !weighingRequired.contains((a.estateId, a.workType))) {
       continue;
     }
@@ -144,9 +170,12 @@ List<WeighableWorker> weighableWorkers({
       employeeCode: a.employeeCode,
       fullName: a.fullName,
       estateId: a.estateId,
-      cpCode: a.cpCode,
-      cpName: cpNames[(a.estateId, a.cpCode)],
+      divisionCode: a.divisionCode!,
+      divisionDescription: divisionNames[(a.estateId, a.divisionCode)],
+      fieldCode: a.fieldCode,
+      fieldDescription: fieldNames[(a.estateId, a.fieldCode)],
       workType: a.workType,
+      workTypeName: workTypeNames[(a.estateId, a.workType)],
       variancePercent: estate.variancePercent,
       entriesToday: 0,
       dailyLimit: estate.maxDailyTransactions,

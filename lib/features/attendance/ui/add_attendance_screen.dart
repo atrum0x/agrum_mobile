@@ -14,7 +14,7 @@ import '../state/attendance_providers.dart';
 const _text = TextStyle(fontSize: 14);
 const _muted = TextStyle(fontSize: 13, color: AppColors.mutedForeground);
 
-/// FSD 2.6 steps 2–7: one batch of workers at one site, work type and collection point.
+/// FSD 2.6 steps 2–7: one batch of workers at one site, work type, division and field.
 class AddAttendanceScreen extends ConsumerStatefulWidget {
   const AddAttendanceScreen({super.key});
 
@@ -26,10 +26,12 @@ class _AddAttendanceScreenState extends ConsumerState<AddAttendanceScreen> {
   String? _siteId;
   bool _siteChosen = false;
   String? _workType;
-  String? _cpCode;
+  String? _divisionCode;
+  String? _fieldCode;
 
-  /// Set once the user picks a collection point; until then it follows the workers' default.
-  bool _cpChosen = false;
+  /// Set once the user picks a division / field; until then each follows the workers' defaults.
+  bool _divisionChosen = false;
+  bool _fieldChosen = false;
 
   /// Ticked workers in tick order, with the category for each (AT-08).
   final _selected = <String, AttendanceCategory?>{};
@@ -66,12 +68,16 @@ class _AddAttendanceScreenState extends ConsumerState<AddAttendanceScreen> {
     final site = source.estates.where((e) => e.id == siteId).firstOrNull;
     final lists = siteId == null ? null : ref.watch(siteListsProvider(siteId)).value;
     final workTypes = lists?.workTypes ?? const <CachedWorkType>[];
-    final collectionPoints = lists?.collectionPoints ?? const <CachedCollectionPoint>[];
+    final divisions = lists?.divisions ?? const <CachedDivision>[];
+    final siteFields = lists?.fields ?? const <CachedField>[];
 
     final workersByCode = {for (final w in source.workers) w.employeeCode: w};
     final selectedWorkers = [for (final code in _selected.keys) ?workersByCode[code]];
-    final workType = _workType ?? (workTypes.length == 1 ? workTypes.single.workType : null);
-    final cpCode = _cpChosen ? _cpCode : defaultCollectionPoint(collectionPoints, selectedWorkers);
+    final workType = _workType ?? (workTypes.length == 1 ? workTypes.single.workTypeCode : null);
+    final divisionCode = _divisionChosen ? _divisionCode : defaultDivision(divisions, selectedWorkers);
+    // Only the fields of the selected division (TC-102)
+    final fields = fieldsOf(siteFields, divisionCode);
+    final fieldCode = _fieldChosen ? _fieldCode : defaultField(fields, selectedWorkers);
 
     final term = _search.trim().toLowerCase();
     final available = source.available
@@ -88,9 +94,11 @@ class _AddAttendanceScreenState extends ConsumerState<AddAttendanceScreen> {
         cacheInfo: source.cacheInfo,
         site: site,
         siteWorkTypes: workTypes,
-        siteCollectionPoints: collectionPoints,
+        siteDivisions: divisions,
+        siteFields: siteFields,
         workType: workType,
-        cpCode: cpCode,
+        divisionCode: divisionCode,
+        fieldCode: fieldCode,
         workers: batch,
         markedToday: source.markedToday,
         canRecordOtherSite: profile.canRecordOtherSite,
@@ -123,7 +131,8 @@ class _AddAttendanceScreenState extends ConsumerState<AddAttendanceScreen> {
         await ref.read(attendanceRecorderProvider).record(
               estateId: site!.id,
               workType: workType!,
-              cpCode: cpCode!,
+              divisionCode: divisionCode!,
+              fieldCode: fieldCode!,
               workers: batch,
               now: now,
             );
@@ -187,9 +196,22 @@ class _AddAttendanceScreenState extends ConsumerState<AddAttendanceScreen> {
                             _siteId = v;
                             _siteChosen = true;
                             _workType = null;
-                            _cpCode = null;
-                            _cpChosen = false;
+                            _divisionCode = null;
+                            _divisionChosen = false;
+                            _fieldCode = null;
+                            _fieldChosen = false;
                           }),
+                        ),
+                      ),
+                      _Field(
+                        label: 'Work Type',
+                        child: _Select<String>(
+                          key: ValueKey('wt-$siteId-$workType'),
+                          value: workType,
+                          enabled: site != null,
+                          placeholder: 'Select a work type',
+                          options: {for (final wt in workTypes) wt.workTypeCode: wt.label},
+                          onChanged: (v) => setState(() => _workType = v),
                         ),
                       ),
                       Row(
@@ -197,41 +219,45 @@ class _AddAttendanceScreenState extends ConsumerState<AddAttendanceScreen> {
                         children: [
                           Expanded(
                             child: _Field(
-                              label: 'Work Type',
+                              label: 'Division',
                               child: _Select<String>(
-                                key: ValueKey('wt-$siteId-$workType'),
-                                value: workType,
+                                key: ValueKey('division-$siteId-$divisionCode'),
+                                value: divisionCode,
                                 enabled: site != null,
                                 placeholder: 'Select',
-                                options: {for (final wt in workTypes) wt.workType: wt.workType},
-                                onChanged: (v) => setState(() => _workType = v),
+                                options: {for (final d in divisions) d.divisionCode: d.label},
+                                onChanged: (v) => setState(() {
+                                  _divisionCode = v;
+                                  _divisionChosen = true;
+                                  // Fields belong to a division
+                                  _fieldCode = null;
+                                  _fieldChosen = false;
+                                }),
                               ),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: _Field(
-                              label: 'Collection Point',
+                              label: 'Field',
                               child: _Select<String>(
-                                key: ValueKey('cp-$siteId-$cpCode'),
-                                value: cpCode,
-                                enabled: site != null,
+                                key: ValueKey('field-$siteId-$divisionCode-$fieldCode'),
+                                value: fieldCode,
+                                enabled: divisionCode != null,
                                 placeholder: 'Select',
-                                options: {
-                                  for (final cp in collectionPoints)
-                                    cp.cpCode:
-                                        cp.name == null || cp.name!.isEmpty ? cp.cpCode : '${cp.cpCode} – ${cp.name}',
-                                },
+                                options: {for (final f in fields) f.fieldCode: f.label},
                                 onChanged: (v) => setState(() {
-                                  _cpCode = v;
-                                  _cpChosen = true;
+                                  _fieldCode = v;
+                                  _fieldChosen = true;
                                 }),
                               ),
                             ),
                           ),
                         ],
                       ),
-                      if (site != null && lists != null && (workTypes.isEmpty || collectionPoints.isEmpty))
+                      if (site != null &&
+                          lists != null &&
+                          (workTypes.isEmpty || divisions.isEmpty || siteFields.isEmpty))
                         const Padding(
                           padding: EdgeInsets.only(bottom: 12),
                           child: Text(AttendanceMessages.siteSetup,

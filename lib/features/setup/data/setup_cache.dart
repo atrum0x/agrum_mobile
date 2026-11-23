@@ -47,7 +47,8 @@ class SetupCache {
       for (final table in const [
         'cache_estates',
         'cache_work_types',
-        'cache_collection_points',
+        'cache_divisions',
+        'cache_fields',
         'cache_workers',
         'cache_weighable',
       ]) {
@@ -59,8 +60,11 @@ class SetupCache {
       for (final wt in data.workTypes) {
         batch.insert('cache_work_types', wt.toRow());
       }
-      for (final cp in data.collectionPoints) {
-        batch.insert('cache_collection_points', cp.toRow());
+      for (final d in data.divisions) {
+        batch.insert('cache_divisions', d.toRow());
+      }
+      for (final f in data.fields) {
+        batch.insert('cache_fields', f.toRow());
       }
       for (final w in data.workers) {
         batch.insert('cache_workers', w.toRow());
@@ -103,15 +107,21 @@ class SetupCache {
 
   Future<List<CachedWorkType>> workTypes(String estateId) async {
     final rows = await (await _db)
-        .query('cache_work_types', where: 'estate_id = ?', whereArgs: [estateId], orderBy: 'work_type');
+        .query('cache_work_types', where: 'estate_id = ?', whereArgs: [estateId], orderBy: 'work_type_code');
     return rows.map(CachedWorkType.fromRow).toList();
   }
 
-  /// The site's default collection point first.
-  Future<List<CachedCollectionPoint>> collectionPoints(String estateId) async {
-    final rows = await (await _db).query('cache_collection_points',
-        where: 'estate_id = ?', whereArgs: [estateId], orderBy: 'is_default DESC, cp_code');
-    return rows.map(CachedCollectionPoint.fromRow).toList();
+  Future<List<CachedDivision>> divisions(String estateId) async {
+    final rows = await (await _db)
+        .query('cache_divisions', where: 'estate_id = ?', whereArgs: [estateId], orderBy: 'division_code');
+    return rows.map(CachedDivision.fromRow).toList();
+  }
+
+  /// All the site's fields, each division's default first.
+  Future<List<CachedField>> fields(String estateId) async {
+    final rows = await (await _db).query('cache_fields',
+        where: 'estate_id = ?', whereArgs: [estateId], orderBy: 'division_code, is_default DESC, field_code');
+    return rows.map(CachedField.fromRow).toList();
   }
 
   /// Workers from all sites; those already marked today are left out unless asked for.
@@ -133,10 +143,16 @@ class SetupCache {
     return rows.map(CachedWorkType.fromRow).toList();
   }
 
-  /// Collection points of every cached site.
-  Future<List<CachedCollectionPoint>> allCollectionPoints() async {
-    final rows = await (await _db).query('cache_collection_points');
-    return rows.map(CachedCollectionPoint.fromRow).toList();
+  /// Divisions of every cached site.
+  Future<List<CachedDivision>> allDivisions() async {
+    final rows = await (await _db).query('cache_divisions');
+    return rows.map(CachedDivision.fromRow).toList();
+  }
+
+  /// Fields of every cached site.
+  Future<List<CachedField>> allFields() async {
+    final rows = await (await _db).query('cache_fields');
+    return rows.map(CachedField.fromRow).toList();
   }
 }
 
