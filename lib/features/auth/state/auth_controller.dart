@@ -161,7 +161,7 @@ class AuthController extends Notifier<AuthState> {
     ref.read(fingerprintControllerProvider.notifier).clearOffer();
     _idleTimer?.cancel();
     await _repo.expire(keepRefreshToken: keepRefreshToken);
-    state = const LoggedOut(message: LoginMessages.sessionExpired);
+    state = LoggedOut(message: LoginMessages.sessionExpired);
   }
 
   /// Called on every touch while logged in.

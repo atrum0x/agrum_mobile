@@ -11,14 +11,15 @@ import '../data/face_recognizer.dart';
 import '../domain/face_quality.dart';
 import '../state/face_providers.dart';
 import 'face_camera_view.dart';
+import '../../../core/i18n/app_strings.dart';
 
 enum _ScanState { starting, waiting, adjusting, checking, failed, error }
 
 /// If the face check hasn't answered for a single frame by then, say so instead of looking stuck.
 const noFramesAfter = Duration(seconds: 5);
-const noFramesMessage = 'The camera is not sending pictures to the face check. Close this screen and open it again.';
+String get noFramesMessage => tr.noFramesMessage;
 
-String faceCheckError(Object error) => 'Face check failed: $error';
+String faceCheckError(Object error) => tr.faceCheckFailed('$error');
 
 /// Identifies a worker by face from the live camera.
 ///
@@ -107,12 +108,12 @@ class _FaceScannerState extends ConsumerState<FaceScanner> {
       _set(
         _ScanState.error,
         e.code.contains('AccessDenied')
-            ? 'Camera permission is needed to identify workers. Allow it in the phone settings.'
-            : 'Camera could not start: ${e.description ?? e.code}',
+            ? tr.cameraPermissionIdentify
+            : tr.cameraCouldNotStart(e.description ?? e.code),
       );
     } catch (e) {
       await camera.dispose();
-      if (generation == _generation) _set(_ScanState.error, 'Camera could not start: $e');
+      if (generation == _generation) _set(_ScanState.error, tr.cameraCouldNotStart('$e'));
     }
   }
 
@@ -136,8 +137,8 @@ class _FaceScannerState extends ConsumerState<FaceScanner> {
     _gotFrame = true;
     if (_processingLock) return;
     if (quality == null) return _set(_ScanState.waiting, null);
-    if (!quality.isGood) return _set(_ScanState.adjusting, quality.message);
-    if (!isStable) return _set(_ScanState.adjusting, 'Hold still...');
+    if (!quality.isGood) return _set(_ScanState.adjusting, tr.faceGuidance(quality.message));
+    if (!isStable) return _set(_ScanState.adjusting, tr.holdStill);
 
     _processingLock = true;
     unawaited(_identify(rawImage, quality));
@@ -158,7 +159,7 @@ class _FaceScannerState extends ConsumerState<FaceScanner> {
       if (problem == null) return;
       _fail(problem);
     } else {
-      _fail('${match.error ?? 'Face not recognised'}. Try again, or search by EMP No.');
+      _fail(tr.faceTryAgain(match.error ?? tr.faceNotRecognised));
     }
   }
 
@@ -185,11 +186,11 @@ class _FaceScannerState extends ConsumerState<FaceScanner> {
   Widget build(BuildContext context) {
     final controller = _camera?.controller;
     final (text, color) = switch (_state) {
-      _ScanState.starting => ('Starting camera…', AppColors.mutedForeground),
-      _ScanState.waiting => ('Point the camera at the worker\'s face', AppColors.mutedForeground),
-      _ScanState.adjusting => (_message ?? 'Hold still...', AppColors.pending),
-      _ScanState.checking => ('Identifying…', AppColors.primary),
-      _ScanState.failed || _ScanState.error => (_message ?? 'Face not recognised', AppColors.destructive),
+      _ScanState.starting => (tr.startingCamera, AppColors.mutedForeground),
+      _ScanState.waiting => (tr.pointCameraAtFace, AppColors.mutedForeground),
+      _ScanState.adjusting => (_message ?? tr.holdStill, AppColors.pending),
+      _ScanState.checking => (tr.identifying, AppColors.primary),
+      _ScanState.failed || _ScanState.error => (_message ?? tr.faceNotRecognised, AppColors.destructive),
     };
     final borderColor = switch (_state) {
       _ScanState.adjusting => AppColors.pendingOnDark,
@@ -219,7 +220,7 @@ class _FaceScannerState extends ConsumerState<FaceScanner> {
                       top: 4,
                       right: 4,
                       child: IconButton(
-                        tooltip: 'Switch camera',
+                        tooltip: tr.switchCamera,
                         constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
                         icon: const Icon(LucideIcons.switchCamera, color: Colors.white),
                         onPressed: _switchCamera,

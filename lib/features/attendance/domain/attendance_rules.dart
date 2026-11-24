@@ -3,26 +3,28 @@ import 'package:intl/intl.dart';
 import '../../setup/data/setup_cache.dart';
 import '../../setup/data/setup_data.dart';
 import '../data/attendance_row.dart';
+import '../../../core/i18n/app_strings.dart';
 
-/// FSD 2.6 (v2.7) messages the phone shows itself. The server checks the same rules again.
+/// FSD 2.6 (v2.7) messages the phone shows itself, in the chosen language. The server checks the
+/// same rules again.
 class AttendanceMessages {
   const AttendanceMessages._();
 
-  static const noWorkers = 'Please select at least one worker.'; // AT-01
-  static String alreadyRecorded(String worker) => 'Attendance has already been recorded today for $worker.'; // AT-02
-  static const siteNotAllowed = 'Attendance cannot be recorded for an inactive or unassigned site.'; // AT-05
-  static String otherSite(String worker) => 'You are not permitted to record $worker at a different site.'; // AT-06
-  static const workType = 'Please select a Work Type.'; // AT-07
-  static const category = 'Please select the Attendance Category.'; // AT-08
-  static const field = 'Please select the Field.'; // AT-09
-  static const siteSetup = 'Site setup is incomplete. Please contact the administrator.'; // AT-10
-  static const todayOnly = 'Attendance can only be recorded for today. Please check the phone date.'; // AT-11
-  static const division = 'Please select the Division.'; // AT-19
+  static String get noWorkers => tr.atNoWorkers; // AT-01
+  static String alreadyRecorded(String worker) => tr.atAlreadyRecorded(worker); // AT-02
+  static String get siteNotAllowed => tr.atSiteNotAllowed; // AT-05
+  static String otherSite(String worker) => tr.atOtherSite(worker); // AT-06
+  static String get workType => tr.atWorkType; // AT-07
+  static String get category => tr.atCategory; // AT-08
+  static String get field => tr.atField; // AT-09
+  static String get siteSetup => tr.atSiteSetup; // AT-10
+  static String get todayOnly => tr.atTodayOnly; // AT-11
+  static String get division => tr.atDivision; // AT-19
 
-  static const noSiteData = 'Site data is not on this phone yet. Connect to the internet and tap Send Now.';
+  static String get noSiteData => tr.noSiteData;
 
-  static String confirm(int n) => 'Attendance cannot be changed after submission. Submit attendance for $n workers?';
-  static String recorded(int n) => 'Attendance recorded for $n workers.';
+  static String confirm(int n) => tr.attendanceConfirm(n);
+  static String recorded(int n) => tr.attendanceRecorded(n);
 }
 
 final _isoDate = DateFormat('yyyy-MM-dd');

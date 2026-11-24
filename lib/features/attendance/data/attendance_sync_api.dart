@@ -5,6 +5,7 @@ import '../../../core/api/api_client.dart';
 import '../../../core/api/api_exception.dart';
 import '../../sync/data/sync_status.dart';
 import 'attendance_row.dart';
+import '../../../core/i18n/app_strings.dart';
 
 /// The server's answer for one record: Sent, or Rejected with the reason to show.
 typedef SyncResult = ({String id, SyncStatus status, String? reason});
@@ -12,7 +13,7 @@ typedef SyncResult = ({String id, SyncStatus status, String? reason});
 class AttendanceMessagesFromServer {
   const AttendanceMessagesFromServer._();
 
-  static const noPermission = 'You do not have permission to record attendance.'; // AT-13
+  static String get noPermission => tr.atNoPermission; // AT-13
 }
 
 /// POST /api/attendance/sync: each record is Sent or Rejected on its own.

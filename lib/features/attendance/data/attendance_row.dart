@@ -1,16 +1,23 @@
 import '../../sync/data/sync_status.dart';
+import '../../../core/i18n/app_strings.dart';
 
 /// FSD 2.6 Attendance Category.
 enum AttendanceCategory {
-  regular('REGULAR', 'Regular'),
-  seasonal('SEASONAL', 'Seasonal'),
-  lent('LENT', 'Lent'),
-  borrowed('BORROWED', 'Borrowed');
+  regular('REGULAR'),
+  seasonal('SEASONAL'),
+  lent('LENT'),
+  borrowed('BORROWED');
 
-  const AttendanceCategory(this.code, this.label);
+  const AttendanceCategory(this.code);
 
   final String code;
-  final String label;
+
+  String get label => switch (this) {
+        regular => tr.categoryRegular,
+        seasonal => tr.categorySeasonal,
+        lent => tr.categoryLent,
+        borrowed => tr.categoryBorrowed,
+      };
 
   static AttendanceCategory? fromCode(String? code) {
     for (final category in values) {

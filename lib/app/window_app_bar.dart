@@ -9,6 +9,7 @@ import '../features/setup/state/setup_controller.dart';
 import '../features/sync/state/send_controller.dart';
 import 'agrum_logo.dart';
 import 'theme.dart';
+import '../core/i18n/app_strings.dart';
 
 /// Light red that stays readable on the dark header, for a failed send.
 const _errorOnDark = Color(0xFFFCA5A5);
@@ -76,12 +77,12 @@ class _StatusLine extends ConsumerWidget {
       SendState(:final activity?) => (activity, Colors.white),
       _ when setup.refreshing => (SendMessages.updatingSiteData, Colors.white),
       SendState(:final result?) => (result.message, result.isError ? _errorOnDark : Colors.white),
-      _ when !online && waiting > 0 => ('Offline · $waiting waiting to send', AppColors.pendingOnDark),
-      _ when !online => ('Offline · records are saved on this phone', AppColors.pendingOnDark),
-      _ when offlineSession && waiting > 0 => ('Logged in offline · $waiting waiting', AppColors.pendingOnDark),
-      _ when waiting > 0 => ('$waiting waiting to send', AppColors.pendingOnDark),
-      _ when setup.info == null => ('Site data not downloaded yet', AppColors.pendingOnDark),
-      _ => ('All sent', Colors.white.withValues(alpha: 0.8)),
+      _ when !online && waiting > 0 => (tr.offlineWaiting(waiting), AppColors.pendingOnDark),
+      _ when !online => (tr.offlineSaved, AppColors.pendingOnDark),
+      _ when offlineSession && waiting > 0 => (tr.offlineSessionWaiting(waiting), AppColors.pendingOnDark),
+      _ when waiting > 0 => (tr.waitingToSend(waiting), AppColors.pendingOnDark),
+      _ when setup.info == null => (tr.siteDataNotDownloaded, AppColors.pendingOnDark),
+      _ => (tr.allSent, Colors.white.withValues(alpha: 0.8)),
     };
 
     return AnimatedSwitcher(
@@ -105,7 +106,7 @@ class _ConnectionIcon extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final online = ref.watch(onlineProvider).value ?? true;
-    final label = online ? 'Online' : 'Offline · records are saved on this phone';
+    final label = online ? tr.online : tr.offlineSaved;
     return Tooltip(
       message: label,
       child: Semantics(
@@ -186,10 +187,10 @@ class _SyncLogoState extends ConsumerState<SyncLogo> with SingleTickerProviderSt
     };
 
     return Tooltip(
-      message: waiting > 0 ? 'Send Now · $waiting waiting to send' : 'Send Now',
+      message: waiting > 0 ? tr.sendNowWaiting(waiting) : tr.sendNow,
       child: Semantics(
         button: true,
-        label: 'Send Now',
+        label: tr.sendNow,
         child: InkResponse(
           radius: 28,
           onTap: send.sending

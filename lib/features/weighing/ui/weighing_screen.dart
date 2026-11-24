@@ -13,6 +13,7 @@ import '../../sync/data/sync_status.dart';
 import '../data/weight_row.dart';
 import '../domain/weighing_rules.dart';
 import '../state/weighing_providers.dart';
+import '../../../core/i18n/app_strings.dart';
 
 // Compact type scale, same as Add Attendance
 const _text = TextStyle(fontSize: 14);
@@ -150,19 +151,18 @@ class _WeighingScreenState extends ConsumerState<WeighingScreen> {
               if (source.cacheInfo == null)
                 ShadAlert(
                   icon: const Icon(LucideIcons.cloudOff),
-                  description: const Text(WeighingMessages.noSiteData, style: _text),
+                  description: Text(WeighingMessages.noSiteData, style: _text),
                 )
               else if (worker == null && !_searchMode && faces.isNotEmpty) ...[
                 FaceScanner(onRecognised: pickByFace),
                 _ModeLink(
                   icon: LucideIcons.search,
-                  text: 'Search by EMP No or name',
+                  text: tr.searchByEmpOrName,
                   onTap: () => setState(() => _searchMode = true),
                 ),
               ] else if (worker == null) ...[
                 if (faces.isEmpty) ...[
-                  const Text('No faces registered on this phone. Register them in More → Face Registration.',
-                      style: _muted),
+                  Text(tr.noFacesRegisteredHint, style: _muted),
                   const SizedBox(height: 12),
                 ],
                 _WorkerPicker(
@@ -179,7 +179,7 @@ class _WeighingScreenState extends ConsumerState<WeighingScreen> {
                 if (faces.isNotEmpty)
                   _ModeLink(
                     icon: LucideIcons.scanFace,
-                    text: 'Identify by face',
+                    text: tr.identifyByFace,
                     onTap: () => setState(() {
                       _searchMode = false;
                       _search = '';
@@ -209,7 +209,7 @@ class _WeighingScreenState extends ConsumerState<WeighingScreen> {
                         // WE-07: needs a valid reading; the scale is not connected
                         enabled: false,
                         leading: const Icon(LucideIcons.scale, size: 18),
-                        child: const Text('Capture Weight', style: _text),
+                        child: Text(tr.captureWeight, style: _text),
                       ),
                     ),
                     // WE-08: only users granted Manual Entry see it
@@ -227,7 +227,7 @@ class _WeighingScreenState extends ConsumerState<WeighingScreen> {
                             });
                             WidgetsBinding.instance.addPostFrameCallback((_) => _weightFocus.requestFocus());
                           },
-                          child: const Text('Manual Entry', style: _text),
+                          child: Text(tr.manualEntry, style: _text),
                         ),
                       ),
                     ],
@@ -235,7 +235,7 @@ class _WeighingScreenState extends ConsumerState<WeighingScreen> {
                 ),
                 if (!canManual) ...[
                   const SizedBox(height: 8),
-                  const Text(WeighingMessages.noScaleReading, style: _muted),
+                  Text(WeighingMessages.noScaleReading, style: _muted),
                 ],
               ],
               if (_error != null) ...[
@@ -259,7 +259,7 @@ class _WeighingScreenState extends ConsumerState<WeighingScreen> {
                 gradient: AppColors.headerGradient,
                 shadows: AppColors.buttonShadows,
                 onPressed: save,
-                child: const Text('Save', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, letterSpacing: 0.3)),
+                child: Text(tr.save, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, letterSpacing: 0.3)),
               ),
             ],
           ),
@@ -304,12 +304,12 @@ class _ScaleStatus extends StatelessWidget {
         children: [
           const Icon(LucideIcons.bluetoothOff, size: 18, color: AppColors.mutedForeground),
           const SizedBox(width: 8),
-          const Expanded(child: Text('Scale not connected', style: _text)),
+          Expanded(child: Text(tr.scaleNotConnected, style: _text)),
           ShadButton.ghost(
             height: 36,
             onPressed: () => ShadToaster.of(context)
-                .show(const ShadToast(description: Text('Scale connection is not available yet.'))),
-            child: const Text('Connect Scale', style: TextStyle(fontSize: 13)),
+                .show(ShadToast(description: Text(tr.scaleNotAvailable))),
+            child: Text(tr.connectScale, style: const TextStyle(fontSize: 13)),
           ),
         ],
       ),
@@ -343,11 +343,11 @@ class _WorkerPicker extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text('Worker', style: _label),
+        Text(tr.worker, style: _label),
         const SizedBox(height: 4),
         ShadInput(
           controller: controller,
-          placeholder: const Text('Search EMP No or name'),
+          placeholder: Text(tr.searchEmpOrName),
           leading: const Icon(LucideIcons.search, size: 18, color: AppColors.mutedForeground),
           style: _text,
           onChanged: onSearch,
@@ -357,9 +357,7 @@ class _WorkerPicker extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Text(
-              term.isNotEmpty
-                  ? 'No workers match "$search".'
-                  : 'No workers to weigh today. Record attendance with a weighing work type first.',
+              term.isNotEmpty ? tr.noWorkersMatch(search) : tr.noWorkersToWeigh,
               style: _muted,
             ),
           )
@@ -422,7 +420,7 @@ class _SelectedWorker extends StatelessWidget {
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    const Text('Entries Today ', style: _muted),
+                    Text('${tr.entriesToday} ', style: _muted),
                     _EntriesPill(worker: worker),
                   ],
                 ),
@@ -435,7 +433,7 @@ class _SelectedWorker extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: 'Change worker',
+            tooltip: tr.changeWorker,
             constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
             icon: const Icon(LucideIcons.x, size: 18, color: AppColors.mutedForeground),
             onPressed: onChange,
@@ -460,7 +458,7 @@ class _EntriesPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
       decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(999)),
-      child: Text('${worker.entriesToday} of ${worker.dailyLimit}',
+      child: Text(tr.xOfY(worker.entriesToday, worker.dailyLimit),
           style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: foreground)),
     );
   }
@@ -492,7 +490,7 @@ class _WeightDisplay extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Text(manual ? 'Weight · Manual' : 'Weight', style: _label),
+          Text(manual ? tr.weightManual : tr.weight, style: _label),
           const SizedBox(height: 4),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -543,9 +541,9 @@ class _WaitingLink extends ConsumerWidget {
     final waiting = all.where((r) => r.status == SyncStatus.waiting).length;
     final rejected = all.where((r) => r.status == SyncStatus.rejected).length;
     final text = [
-      if (waiting > 0) '$waiting waiting to send',
-      if (rejected > 0) '$rejected rejected',
-      if (waiting == 0 && rejected == 0) '${list?.today.length ?? 0} weighings today',
+      if (waiting > 0) tr.waitingToSend(waiting),
+      if (rejected > 0) tr.rejectedCount(rejected),
+      if (waiting == 0 && rejected == 0) tr.weighingsTodayCount(list?.today.length ?? 0),
     ].join(' · ');
     final color = rejected > 0
         ? AppColors.destructive
@@ -590,20 +588,20 @@ class _WeighingListSheet extends ConsumerWidget {
         controller: scroll,
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
         children: [
-          Text('Weighings today, ${_date.format(DateTime.now())}',
+          Text(tr.weighingsTodayDate(_date.format(DateTime.now())),
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           if (list == null || (list.today.isEmpty && list.earlier.isEmpty))
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Text('No weighings recorded today on this phone.', style: _muted),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Text(tr.noWeighingsToday, style: _muted),
             )
           else ...[
             for (final row in list.today) _WeighingTile(row: row),
             if (list.earlier.isNotEmpty) ...[
-              const Padding(
-                padding: EdgeInsets.fromLTRB(0, 12, 0, 8),
-                child: Text('Earlier days, not sent', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(0, 12, 0, 8),
+                child: Text(tr.earlierNotSent, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
               ),
               for (final row in list.earlier) _WeighingTile(row: row, showDate: true),
             ],
@@ -643,7 +641,7 @@ class _WeighingTile extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  'Weighing ${row.sequence} · ${row.entryType.label} · '
+                  '${tr.weighingNumber(row.sequence)} · ${row.entryType.label} · '
                   '${showDate ? '${_date.format(at)} ' : ''}${_time.format(at)}',
                   style: _muted,
                 ),

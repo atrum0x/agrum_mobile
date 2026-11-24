@@ -6,24 +6,25 @@ import '../../setup/data/setup_cache.dart';
 import '../../setup/data/setup_data.dart';
 import '../../sync/data/sync_status.dart';
 import '../data/weight_row.dart';
+import '../../../core/i18n/app_strings.dart';
 
-/// FSD 2.7 messages the phone shows itself. The server checks the same rules again.
+/// FSD 2.7 messages the phone shows itself, in the chosen language. The server checks the same
+/// rules again.
 class WeighingMessages {
   const WeighingMessages._();
 
-  static const selectWorker = 'Please select a worker.'; // WE-01
-  static String limitReached(int n) => 'Maximum of $n weighings per day already recorded for this worker.'; // WE-04
-  static const weight = 'Please enter a weight greater than 0.'; // WE-06
-  static const noScaleReading = 'No valid reading from the scale. Please check the scale connection.'; // WE-07
-  static const noManual = 'You are not permitted to enter weight manually.'; // WE-08
-  static const noPermission = 'You do not have permission to record weights.'; // WE-11
-  static const todayOnly = 'Weights can only be recorded for today. Please check the phone date.';
-  static const entryType = 'Please capture the weight from the scale or enter it manually.';
+  static String get selectWorker => tr.weSelectWorker; // WE-01
+  static String limitReached(int n) => tr.weLimitReached(n); // WE-04
+  static String get weight => tr.weWeight; // WE-06
+  static String get noScaleReading => tr.weNoScaleReading; // WE-07
+  static String get noManual => tr.weNoManual; // WE-08
+  static String get noPermission => tr.weNoPermission; // WE-11
+  static String get todayOnly => tr.weTodayOnly;
+  static String get entryType => tr.weEntryType;
 
-  static const noSiteData = AttendanceMessages.noSiteData;
+  static String get noSiteData => AttendanceMessages.noSiteData;
 
-  static String saved(String employeeCode, int sequence, double kg) =>
-      'Saved – $employeeCode, weighing $sequence, ${formatKg(kg)} kg';
+  static String saved(String employeeCode, int sequence, double kg) => tr.weSaved(employeeCode, sequence, formatKg(kg));
 }
 
 final _kg = NumberFormat('0.00');

@@ -13,26 +13,26 @@ import 'auth_api.dart';
 import 'fingerprint_keys.dart';
 import 'offline_credential.dart';
 import 'user_profile.dart';
+import '../../../core/i18n/app_strings.dart';
 
-/// FSD 2.1 messages that the phone itself shows.
+/// FSD 2.1 messages that the phone itself shows, in the chosen language.
 class LoginMessages {
   const LoginMessages._();
 
-  static const enterUsername = 'Please enter your username.'; // LG-01
-  static const enterPassword = 'Please enter your password.'; // LG-02
-  static const incorrect = 'Username or password is incorrect.'; // LG-03
-  static const noAccess = 'You do not have access to this application. Please contact the administrator.'; // LG-05
-  static const sessionExpired = 'Your session has expired. Please log in again.'; // LG-06
-  static const connectToLogIn = 'Please connect to the internet to log in.'; // LG-07
-  static const forgotPassword = 'Contact administrator to change password.';
+  static String get enterUsername => tr.enterUsername; // LG-01
+  static String get enterPassword => tr.enterPassword; // LG-02
+  static String get incorrect => tr.loginIncorrect; // LG-03
+  static String get noAccess => tr.noAccess; // LG-05
+  static String get sessionExpired => tr.sessionExpired; // LG-06
+  static String get connectToLogIn => tr.connectToLogIn; // LG-07
+  static String get forgotPassword => tr.contactAdminForPassword;
 
   // Fingerprint login (not in the FSD; an addition on the phone)
-  static const fingerprintFailed = 'Fingerprint login failed. Please log in with your password.';
-  static const fingerprintsChanged =
-      'The fingerprints on this phone have changed. Log in with your password, then turn fingerprint login on again.';
-  static const fingerprintLockedOut = 'Too many fingerprint attempts. Please log in with your password.';
-  static const fingerprintUnavailable = 'Set up a fingerprint in the phone settings first.';
-  static const fingerprintNeedsInternet = 'Please connect to the internet to turn on fingerprint login.';
+  static String get fingerprintFailed => tr.fingerprintFailed;
+  static String get fingerprintsChanged => tr.fingerprintChanged;
+  static String get fingerprintLockedOut => tr.fingerprintLockedOut;
+  static String get fingerprintUnavailable => tr.fingerprintUnavailable;
+  static String get fingerprintNeedsInternet => tr.fingerprintNeedsInternet;
 }
 
 /// The user closed the fingerprint prompt; nothing to show.
@@ -106,8 +106,8 @@ class AuthRepository {
   /// Online when the server can be reached, otherwise an offline login (LG-07).
   Future<Session> login(String username, String password) async {
     final user = username.trim();
-    if (user.isEmpty) throw const LoginException(LoginMessages.enterUsername);
-    if (password.isEmpty) throw const LoginException(LoginMessages.enterPassword);
+    if (user.isEmpty) throw LoginException(LoginMessages.enterUsername);
+    if (password.isEmpty) throw LoginException(LoginMessages.enterPassword);
 
     if (await _isOnline()) {
       try {
@@ -135,7 +135,7 @@ class AuthRepository {
     // LG-05: the phone's windows are Attendance and Enter Weight
     if (!profile.hasMobileAccess) {
       await _revokeQuietly(profile.username);
-      throw const LoginException(LoginMessages.noAccess);
+      throw LoginException(LoginMessages.noAccess);
     }
 
     // The phone now belongs to this user; another user's fingerprint must not log in to it
@@ -157,10 +157,10 @@ class AuthRepository {
         profile == null ||
         !credential.isFor(username) ||
         !credential.isWithin(_offlineLoginPeriod, _clock())) {
-      throw const LoginException(LoginMessages.connectToLogIn);
+      throw LoginException(LoginMessages.connectToLogIn);
     }
     if (!await _checkCredential(credential, password)) {
-      throw const LoginException(LoginMessages.incorrect); // LG-03
+      throw LoginException(LoginMessages.incorrect); // LG-03
     }
     // Tokens left from another user must not be used for this one
     final tokenUser = await _tokens.username();
@@ -197,7 +197,7 @@ class AuthRepository {
   /// public key registered with the server, which checks the password again. Needs the internet.
   /// Throws [LoginException] or [FingerprintCanceled].
   Future<void> enableFingerprint(String username, String password) async {
-    if (!await _isOnline()) throw const LoginException(LoginMessages.fingerprintNeedsInternet);
+    if (!await _isOnline()) throw LoginException(LoginMessages.fingerprintNeedsInternet);
     final previous = await fingerprintLogin();
     final publicKey = await _guardFingerprint(_fingerprint.createKey);
     // The new key replaced the old one in the Keystore, so the old set-up can't sign any more
@@ -229,7 +229,7 @@ class AuthRepository {
   /// [FingerprintCanceled].
   Future<Session> loginWithFingerprint() async {
     final fingerprint = await fingerprintLogin();
-    if (fingerprint == null) throw const LoginException(LoginMessages.fingerprintFailed);
+    if (fingerprint == null) throw LoginException(LoginMessages.fingerprintFailed);
 
     if (await _isOnline()) {
       try {
@@ -265,7 +265,7 @@ class AuthRepository {
     // LG-05: the phone's windows are Attendance and Enter Weight
     if (!profile.hasMobileAccess) {
       await _revokeQuietly(profile.username);
-      throw const LoginException(LoginMessages.noAccess);
+      throw LoginException(LoginMessages.noAccess);
     }
     await _store.write(_profileKey, jsonEncode(profile.toJson()));
     // An online login, so the offline login period (CL-04) starts again; the password hash stays
@@ -286,7 +286,7 @@ class AuthRepository {
         !credential.isFor(fingerprint.username) ||
         !_sameUser(profile.username, fingerprint.username) ||
         !credential.isWithin(_offlineLoginPeriod, _clock())) {
-      throw const LoginException(LoginMessages.connectToLogIn);
+      throw LoginException(LoginMessages.connectToLogIn);
     }
     final random = Random.secure();
     final nonce = base64Url.encode(List<int>.generate(16, (_) => random.nextInt(256)));
@@ -313,13 +313,13 @@ class AuthRepository {
             await _forgetFingerprint();
             await _removeOnServerQuietly(fingerprint.keyId);
           }
-          throw const LoginException(LoginMessages.fingerprintsChanged);
+          throw LoginException(LoginMessages.fingerprintsChanged);
         case FingerprintFailure.lockedOut:
-          throw const LoginException(LoginMessages.fingerprintLockedOut);
+          throw LoginException(LoginMessages.fingerprintLockedOut);
         case FingerprintFailure.unavailable:
-          throw const LoginException(LoginMessages.fingerprintUnavailable);
+          throw LoginException(LoginMessages.fingerprintUnavailable);
         case FingerprintFailure.failed:
-          throw const LoginException(LoginMessages.fingerprintFailed);
+          throw LoginException(LoginMessages.fingerprintFailed);
       }
     }
   }
@@ -382,7 +382,7 @@ class AuthRepository {
     // LG-05: the phone's windows are Attendance and Enter Weight
     if (!profile.hasMobileAccess) {
       await _revokeQuietly(profile.username);
-      throw const LoginException(LoginMessages.noAccess);
+      throw LoginException(LoginMessages.noAccess);
     }
     await _store.write(_profileKey, jsonEncode(profile.toJson()));
     await _startSession(offline: false);

@@ -12,6 +12,7 @@ import '../domain/embedding_aggregator.dart';
 import 'camera_image_converter.dart' show mainFace;
 import 'face_preprocessor.dart';
 import 'in_memory_face_processor.dart';
+import '../../../core/i18n/app_strings.dart';
 
 // Ported from face_verification_demo (FaceVerificationService). No liveness check, by decision: the
 // supervisor is at the scale, and the weighing keeps the face photo as evidence.
@@ -28,6 +29,16 @@ class RegistrationPose {
     required this.minYaw,
     required this.maxYaw,
   });
+
+  /// [instruction] in the chosen language, for the screen.
+  String get label => switch (imageId) {
+        'front' => tr.poseFront,
+        'turn_left' => tr.poseLeft,
+        'turn_right' => tr.poseRight,
+        'front_relaxed' => tr.poseRelaxed,
+        'front_alt_lighting' => tr.poseAltLighting,
+        _ => instruction,
+      };
 }
 
 const List<RegistrationPose> registrationPoses = [
@@ -159,10 +170,10 @@ class FaceRecognizer {
     double threshold = matchThreshold,
   }) async {
     if (_interpreter == null) {
-      return const FaceMatch(success: false, error: 'Face model not loaded');
+      return FaceMatch(success: false, error: tr.faceModelNotLoaded);
     }
     if (_registeredTemplates.isEmpty) {
-      return const FaceMatch(success: false, error: 'No faces registered on this phone');
+      return FaceMatch(success: false, error: tr.noFacesOnPhone);
     }
 
     try {
@@ -177,7 +188,7 @@ class FaceRecognizer {
         photo: frame.photo,
       );
     } catch (e) {
-      return FaceMatch(success: false, error: 'Face check failed: $e');
+      return FaceMatch(success: false, error: tr.faceCheckFailed('$e'));
     }
   }
 
@@ -193,7 +204,7 @@ class FaceRecognizer {
     }
 
     final faces = await _diskFaceDetector!.processImage(InputImage.fromFilePath(imagePath));
-    if (faces.isEmpty) throw Exception('No face found in the photo. Try again.');
+    if (faces.isEmpty) throw Exception(tr.noFaceInPhoto);
 
     final address = _interpreter!.address;
     // The biggest face, as on the live camera: not a small one in the background
@@ -267,10 +278,10 @@ FaceMatch bestMatch(
   debugPrint('[Face] best $bestCode ${best.toStringAsFixed(4)}, next ${second.toStringAsFixed(4)}');
 
   if (bestCode == null || best < threshold) {
-    return FaceMatch(success: false, similarity: best, error: 'Face not recognised');
+    return FaceMatch(success: false, similarity: best, error: tr.faceNotRecognised);
   }
   if (best - second < margin) {
-    return FaceMatch(success: false, similarity: best, error: 'Not sure who this is');
+    return FaceMatch(success: false, similarity: best, error: tr.notSureWho);
   }
   return FaceMatch(success: true, employeeCode: bestCode, similarity: best);
 }
@@ -307,11 +318,11 @@ Future<({List<double> embedding, Uint8List? photo})> _embedPhotoInBackground(
     Isolate.run(() {
       final interpreter = Interpreter.fromAddress(address, allocated: true);
       final originalImage = img.decodeImage(File(imagePath).readAsBytesSync());
-      if (originalImage == null) throw Exception('Could not read the photo. Try again.');
+      if (originalImage == null) throw Exception(tr.couldNotReadPhoto);
 
       // Same alignment and crop as identify, so registered and live faces compare like for like
       final croppedFace = FacePreprocessor.alignFace(originalImage, face);
-      if (croppedFace == null) throw Exception('Could not crop the face. Try again.');
+      if (croppedFace == null) throw Exception(tr.couldNotCropFace);
 
       final input = _buildInputFromCroppedImage(croppedFace, interpreter.getInputTensor(0));
       return (

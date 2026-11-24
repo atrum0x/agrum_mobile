@@ -11,20 +11,28 @@ import '../../auth/state/auth_controller.dart';
 import '../../auth/ui/fingerprint_ui.dart';
 import '../../setup/state/setup_controller.dart';
 import 'notched_tab_bar.dart';
+import '../../../core/i18n/app_strings.dart';
 
 /// A bottom tab; [branch] is its index in the router's StatefulShellRoute.
 class AppTab {
-  const AppTab(this.branch, this.label, this.icon, this.path);
+  const AppTab(this.branch, this.icon, this.path);
 
   final int branch;
-  final String label;
   final IconData icon;
   final String path;
 
-  static const home = AppTab(0, 'Home', LucideIcons.house, '/home');
-  static const attendance = AppTab(1, 'Attendance', LucideIcons.clipboardCheck, '/attendance');
-  static const weighing = AppTab(2, 'Weighing', LucideIcons.scale, '/weighing');
-  static const more = AppTab(3, 'More', LucideIcons.ellipsis, '/more');
+  /// In the chosen language.
+  String get label => switch (branch) {
+        0 => tr.tabHome,
+        1 => tr.tabAttendance,
+        2 => tr.tabWeighing,
+        _ => tr.tabMore,
+      };
+
+  static const home = AppTab(0, LucideIcons.house, '/home');
+  static const attendance = AppTab(1, LucideIcons.clipboardCheck, '/attendance');
+  static const weighing = AppTab(2, LucideIcons.scale, '/weighing');
+  static const more = AppTab(3, LucideIcons.ellipsis, '/more');
 
   /// A window's tab shows only if the user may use that window (FSD 2.1, TC-03).
   static List<AppTab> visibleFor(UserProfile profile) => [

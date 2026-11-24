@@ -8,6 +8,7 @@ import '../../../shared/widgets/sync_status_badge.dart';
 import '../../sync/data/sync_status.dart';
 import '../data/attendance_row.dart';
 import '../state/attendance_providers.dart';
+import '../../../core/i18n/app_strings.dart';
 
 final _date = DateFormat('dd/MM/yyyy');
 final _time = DateFormat('HH:mm');
@@ -30,9 +31,9 @@ class AttendanceScreen extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
           child: Row(
             children: [
-              Expanded(child: Text('Today, ${_date.format(DateTime.now())}', style: theme.textTheme.h4)),
+              Expanded(child: Text(tr.todayDate(_date.format(DateTime.now())), style: theme.textTheme.h4)),
               if (rows.value case final list? when list.isNotEmpty)
-                Text('${list.length} workers', style: theme.textTheme.muted),
+                Text(tr.workersCount(list.length), style: theme.textTheme.muted),
             ],
           ),
         ),
@@ -42,7 +43,7 @@ class AttendanceScreen extends ConsumerWidget {
                 child: Padding(
                   padding: const EdgeInsets.all(24),
                   child: Text(
-                    'No attendance recorded today on this phone.',
+                    tr.noAttendanceToday,
                     style: theme.textTheme.muted,
                     textAlign: TextAlign.center,
                   ),
@@ -55,7 +56,7 @@ class AttendanceScreen extends ConsumerWidget {
                   if (earlier.isNotEmpty) ...[
                     Padding(
                       padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
-                      child: Text('Earlier days, not sent', style: theme.textTheme.large),
+                      child: Text(tr.earlierNotSent, style: theme.textTheme.large),
                     ),
                     for (final row in earlier) _AttendanceTile(row: row, showDate: true),
                   ],
@@ -74,7 +75,7 @@ class AttendanceScreen extends ConsumerWidget {
             shadows: AppColors.buttonShadows,
             leading: const Icon(LucideIcons.userPlus, size: 22),
             onPressed: () => context.go('/attendance/add'),
-            child: const Text('Add Attendance', style: TextStyle(fontSize: 18)),
+            child: Text(tr.addAttendance, style: const TextStyle(fontSize: 18)),
           ),
         ),
       ],
