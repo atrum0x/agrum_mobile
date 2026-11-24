@@ -6,6 +6,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import '../../../app/theme.dart';
 import '../../auth/state/auth_controller.dart';
 import 'app_shell.dart';
+import '../../../core/i18n/app_strings.dart';
 
 /// FSD 2.1 Mobile Home: Attendance and Weighing buttons (only those the user is granted).
 /// The header, send status and tab bar come from AppShell.
@@ -22,21 +23,21 @@ class HomeScreen extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        Text('Hello, ${profile.displayName}', style: theme.textTheme.h3),
+        Text(tr.hello(profile.displayName), style: theme.textTheme.h3),
         const SizedBox(height: 24),
         if (profile.canRecordAttendance)
           _WindowButton(
             icon: LucideIcons.clipboardCheck,
-            label: 'Attendance',
-            hint: 'Mark today\'s workers present',
+            label: tr.tabAttendance,
+            hint: tr.attendanceHint,
             onPressed: () => context.go(AppTab.attendance.path),
           ),
         if (profile.canRecordAttendance && profile.canRecordWeights) const SizedBox(height: 16),
         if (profile.canRecordWeights)
           _WindowButton(
             icon: LucideIcons.scale,
-            label: 'Weighing',
-            hint: 'Weigh pluckers\' tea',
+            label: tr.tabWeighing,
+            hint: tr.weighingHint,
             onPressed: () => context.go(AppTab.weighing.path),
           ),
       ],

@@ -8,21 +8,33 @@ import '../../auth/state/auth_controller.dart';
 import '../../setup/state/setup_controller.dart';
 import '../data/send_queue.dart';
 import '../data/sync_engine.dart';
+import '../../../core/i18n/app_strings.dart';
 
 /// Short texts for the one-line status under the window title.
 class SendMessages {
   const SendMessages._();
 
-  static const noConnection = 'Sending failed · no connection';
-  static String failed(String reason) => 'Sending failed · $reason';
-  static const allSent = 'All sent · site data updated';
-  static const offlineSession = 'Logged in offline · log in online to send';
-  static const updatingSiteData = 'Updating site data…';
-  static String sending(String what, int done, int total) => 'Sending $what $done of $total…';
+  static String get noConnection => tr.sendNoConnection;
+  static String failed(String reason) => tr.sendFailed(reason);
+  static String get allSent => tr.sendAllSent;
+  static String get offlineSession => tr.sendOfflineSession;
+  static String get updatingSiteData => tr.updatingSiteData;
+
+  /// [what] is the sync engine's name for the records: attendance, weighings or faces.
+  static String sending(String what, int done, int total) => tr.sendingProgress(
+        switch (what) {
+          'attendance' => tr.whatAttendance,
+          'weighings' => tr.whatWeighings,
+          'faces' => tr.whatFaces,
+          _ => what,
+        },
+        done,
+        total,
+      );
 
   static String result(int sent, int rejected) => [
-        if (sent > 0) '$sent sent',
-        if (rejected > 0) '$rejected rejected',
+        if (sent > 0) tr.sentCount(sent),
+        if (rejected > 0) tr.rejectedCount(rejected),
       ].join(' · ');
 }
 

@@ -9,6 +9,7 @@ import '../../setup/data/setup_data.dart';
 import '../data/attendance_row.dart';
 import '../domain/attendance_rules.dart';
 import '../state/attendance_providers.dart';
+import '../../../core/i18n/app_strings.dart';
 
 // Compact type scale for this form
 const _text = TextStyle(fontSize: 14);
@@ -112,15 +113,15 @@ class _AddAttendanceScreenState extends ConsumerState<AddAttendanceScreen> {
       final confirmed = await showShadDialog<bool>(
         context: context,
         builder: (context) => ShadDialog.alert(
-          title: const Text('Submit attendance'),
+          title: Text(tr.submitAttendanceTitle),
           description: Text(AttendanceMessages.confirm(batch.length)),
           actions: [
             ShadButton.outline(
               height: 48,
-              child: const Text('Cancel'),
+              child: Text(tr.cancel),
               onPressed: () => Navigator.of(context).pop(false),
             ),
-            ShadButton(height: 48, child: const Text('Submit'), onPressed: () => Navigator.of(context).pop(true)),
+            ShadButton(height: 48, child: Text(tr.submit), onPressed: () => Navigator.of(context).pop(true)),
           ],
         ),
       );
@@ -154,13 +155,13 @@ class _AddAttendanceScreenState extends ConsumerState<AddAttendanceScreen> {
           child: Row(
             children: [
               IconButton(
-                tooltip: 'Back',
+                tooltip: tr.back,
                 iconSize: 24,
                 constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
                 icon: const Icon(LucideIcons.arrowLeft),
                 onPressed: () => context.go('/attendance'),
               ),
-              const Text('Add Attendance', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+              Text(tr.addAttendance, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
             ],
           ),
         ),
@@ -182,15 +183,15 @@ class _AddAttendanceScreenState extends ConsumerState<AddAttendanceScreen> {
                     if (source.cacheInfo == null)
                       ShadAlert(
                         icon: const Icon(LucideIcons.cloudOff),
-                        description: const Text(AttendanceMessages.noSiteData, style: _text),
+                        description: Text(AttendanceMessages.noSiteData, style: _text),
                       )
                     else ...[
                       _Field(
-                        label: 'Working Site',
+                        label: tr.workingSite,
                         child: _Select<String>(
                           key: ValueKey('site-$siteId'),
                           value: siteId,
-                          placeholder: 'Select a site',
+                          placeholder: tr.selectSite,
                           options: {for (final e in source.estates) e.id: '${e.id} – ${e.name}'},
                           onChanged: (v) => setState(() {
                             _siteId = v;
@@ -204,12 +205,12 @@ class _AddAttendanceScreenState extends ConsumerState<AddAttendanceScreen> {
                         ),
                       ),
                       _Field(
-                        label: 'Work Type',
+                        label: tr.workType,
                         child: _Select<String>(
                           key: ValueKey('wt-$siteId-$workType'),
                           value: workType,
                           enabled: site != null,
-                          placeholder: 'Select a work type',
+                          placeholder: tr.selectWorkType,
                           options: {for (final wt in workTypes) wt.workTypeCode: wt.label},
                           onChanged: (v) => setState(() => _workType = v),
                         ),
@@ -219,12 +220,12 @@ class _AddAttendanceScreenState extends ConsumerState<AddAttendanceScreen> {
                         children: [
                           Expanded(
                             child: _Field(
-                              label: 'Division',
+                              label: tr.division,
                               child: _Select<String>(
                                 key: ValueKey('division-$siteId-$divisionCode'),
                                 value: divisionCode,
                                 enabled: site != null,
-                                placeholder: 'Select',
+                                placeholder: tr.select,
                                 options: {for (final d in divisions) d.divisionCode: d.label},
                                 onChanged: (v) => setState(() {
                                   _divisionCode = v;
@@ -239,12 +240,12 @@ class _AddAttendanceScreenState extends ConsumerState<AddAttendanceScreen> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: _Field(
-                              label: 'Field',
+                              label: tr.field,
                               child: _Select<String>(
                                 key: ValueKey('field-$siteId-$divisionCode-$fieldCode'),
                                 value: fieldCode,
                                 enabled: divisionCode != null,
-                                placeholder: 'Select',
+                                placeholder: tr.select,
                                 options: {for (final f in fields) f.fieldCode: f.label},
                                 onChanged: (v) => setState(() {
                                   _fieldCode = v;
@@ -258,22 +259,22 @@ class _AddAttendanceScreenState extends ConsumerState<AddAttendanceScreen> {
                       if (site != null &&
                           lists != null &&
                           (workTypes.isEmpty || divisions.isEmpty || siteFields.isEmpty))
-                        const Padding(
-                          padding: EdgeInsets.only(bottom: 12),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
                           child: Text(AttendanceMessages.siteSetup,
-                              style: TextStyle(fontSize: 13, color: AppColors.destructive)),
+                              style: const TextStyle(fontSize: 13, color: AppColors.destructive)),
                         ),
                       _Field(
-                        label: 'Workers present',
+                        label: tr.workersPresent,
                         child: ShadInput(
-                          placeholder: const Text('Search EMP No or name'),
+                          placeholder: Text(tr.searchEmpOrName),
                           leading: const Icon(LucideIcons.search, size: 18, color: AppColors.mutedForeground),
                           style: _text,
                           onChanged: (v) => setState(() => _search = v),
                         ),
                       ),
                       Text(
-                        _selected.isEmpty ? 'Tick the workers present' : '${_selected.length} selected',
+                        _selected.isEmpty ? tr.tickWorkersPresent : tr.selectedCount(_selected.length),
                         style: _selected.isEmpty
                             ? _muted
                             : const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary),
@@ -291,7 +292,7 @@ class _AddAttendanceScreenState extends ConsumerState<AddAttendanceScreen> {
                           child: Padding(
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             child: Text(
-                              term.isEmpty ? 'No more workers to mark today.' : 'No workers match "$_search".',
+                              term.isEmpty ? tr.noMoreWorkers : tr.noWorkersMatch(_search),
                               style: _muted,
                             ),
                           ),
@@ -310,7 +311,7 @@ class _AddAttendanceScreenState extends ConsumerState<AddAttendanceScreen> {
                               category: ticked
                                   ? _selected[w.employeeCode]
                                   : AttendanceCategory.fromCode(w.defaultCategory),
-                              note: otherSite ? 'Default site ${w.defaultEstateId}' : null,
+                              note: otherSite ? tr.defaultSite('${w.defaultEstateId}') : null,
                               allowed: allowed,
                               onCategory: (c) => setState(() => _selected[w.employeeCode] = c),
                               onTap: () {
@@ -345,7 +346,7 @@ class _AddAttendanceScreenState extends ConsumerState<AddAttendanceScreen> {
             shadows: AppColors.buttonShadows,
             onPressed: submit,
             child: Text(
-              _selected.isEmpty ? 'Submit' : 'Submit (${_selected.length})',
+              _selected.isEmpty ? tr.submit : tr.submitCount(_selected.length),
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, letterSpacing: 0.3),
             ),
           ),
@@ -484,7 +485,7 @@ class _WorkerRow extends StatelessWidget {
             const SizedBox(width: 8),
             if (ticked)
               PopupMenuButton<AttendanceCategory>(
-                tooltip: 'Change category',
+                tooltip: tr.changeCategory,
                 initialValue: category,
                 onSelected: onCategory,
                 itemBuilder: (context) => [
@@ -526,7 +527,7 @@ class _CategoryBadge extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              category?.label ?? 'Category',
+              category?.label ?? tr.category,
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: foreground),
             ),
             if (editable) ...[

@@ -1,16 +1,21 @@
 import 'dart:typed_data';
 
 import '../../sync/data/sync_status.dart';
+import '../../../core/i18n/app_strings.dart';
 
 /// FSD 2.7 Entry Type: from the scale, or typed in by a permitted user (WE-08).
 enum EntryType {
-  automatic('AUTOMATIC', 'Automatic'),
-  manual('MANUAL', 'Manual');
+  automatic('AUTOMATIC'),
+  manual('MANUAL');
 
-  const EntryType(this.code, this.label);
+  const EntryType(this.code);
 
   final String code;
-  final String label;
+
+  String get label => switch (this) {
+        automatic => tr.entryAutomatic,
+        manual => tr.entryManual,
+      };
 
   static EntryType fromCode(String code) => values.firstWhere((t) => t.code == code, orElse: () => manual);
 }

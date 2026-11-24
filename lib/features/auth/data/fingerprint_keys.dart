@@ -1,5 +1,6 @@
 import 'package:biometric_signature/biometric_signature.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/i18n/app_strings.dart';
 
 enum FingerprintFailure {
   /// The user closed the prompt or chose "Use password".
@@ -66,7 +67,7 @@ class KeystoreFingerprintKeys implements FingerprintKeys {
     final result = await _plugin.createKeys(
       keyAlias: _alias,
       keyFormat: KeyFormat.base64,
-      promptMessage: 'Turn on fingerprint login',
+      promptMessage: tr.turnOnFingerprintLogin,
       config: CreateKeysConfig(
         signatureType: SignatureType.ecdsa,
         enforceBiometric: true,
@@ -76,7 +77,7 @@ class KeystoreFingerprintKeys implements FingerprintKeys {
         useDeviceCredentials: false,
         enableDecryption: false,
         promptSubtitle: 'Agrum',
-        cancelButtonText: 'Cancel',
+        cancelButtonText: tr.cancel,
       ),
     );
     final publicKey = result.publicKey;
@@ -90,8 +91,8 @@ class KeystoreFingerprintKeys implements FingerprintKeys {
       payload: text,
       keyAlias: _alias,
       signatureFormat: SignatureFormat.base64,
-      promptMessage: 'Log in to Agrum',
-      config: CreateSignatureConfig(allowDeviceCredentials: false, cancelButtonText: 'Use password'),
+      promptMessage: tr.loginToAgrum,
+      config: CreateSignatureConfig(allowDeviceCredentials: false, cancelButtonText: tr.usePassword),
     );
     final signature = result.signature;
     if (result.code != BiometricError.success || signature == null) throw _failure(result.code, result.error);

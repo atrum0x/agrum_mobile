@@ -27,6 +27,7 @@ import '../domain/face_quality.dart';
 import '../state/face_providers.dart';
 import 'face_camera_view.dart';
 import 'face_scanner.dart' show faceCheckError, noFramesAfter, noFramesMessage;
+import '../../../core/i18n/app_strings.dart';
 
 const _text = TextStyle(fontSize: 14);
 const _muted = TextStyle(fontSize: 13, color: AppColors.mutedForeground);
@@ -57,18 +58,17 @@ class _FaceRegistrationScreenState extends ConsumerState<FaceRegistrationScreen>
     final confirmed = await showShadDialog<bool>(
       context: context,
       builder: (context) => ShadDialog.alert(
-        title: const Text('Remove face'),
-        description: Text('Remove the registered face of $name? At the scale they are picked by search '
-            'until their face is registered again.'),
+        title: Text(tr.removeFace),
+        description: Text(tr.removeFaceBody(name)),
         actions: [
           ShadButton.outline(
             height: 48,
-            child: const Text('Cancel'),
+            child: Text(tr.cancel),
             onPressed: () => Navigator.of(context).pop(false),
           ),
           ShadButton.destructive(
             height: 48,
-            child: const Text('Remove'),
+            child: Text(tr.remove),
             onPressed: () => Navigator.of(context).pop(true),
           ),
         ],
@@ -80,10 +80,10 @@ class _FaceRegistrationScreenState extends ConsumerState<FaceRegistrationScreen>
       await ref.read(faceSyncApiProvider).remove(w.employeeCode);
       await ref.read(faceStoreProvider).delete(w.employeeCode);
       ref.invalidate(faceTemplatesProvider);
-      toaster.show(ShadToast(description: Text('Face removed for $name.')));
+      toaster.show(ShadToast(description: Text(tr.faceRemoved(name))));
     } on ApiException catch (e) {
       toaster.show(ShadToast.destructive(
-        description: Text(e.isNetwork ? 'Removing a face needs a connection. Try again when online.' : e.message),
+        description: Text(e.isNetwork ? tr.removeNeedsConnection : e.message),
       ));
     }
   }
@@ -122,24 +122,20 @@ class _FaceRegistrationScreenState extends ConsumerState<FaceRegistrationScreen>
         Row(
           children: [
             IconButton(
-              tooltip: 'Back',
+              tooltip: tr.back,
               constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
               icon: const Icon(LucideIcons.arrowLeft, size: 20),
               onPressed: () => context.go('/more'),
             ),
-            const Expanded(
-              child: Text('Face Registration', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            Expanded(
+              child: Text(tr.faceRegistration, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             ),
           ],
         ),
-        const Text(
-          'Pick the employee, then follow the steps with their face in the oval. '
-          'Registering again replaces their face. Faces are sent to the server like other records.',
-          style: _muted,
-        ),
+        Text(tr.faceRegistrationIntro, style: _muted),
         const SizedBox(height: 12),
         ShadInput(
-          placeholder: const Text('Search EMP No or name'),
+          placeholder: Text(tr.searchEmpOrName),
           leading: const Icon(LucideIcons.search, size: 18, color: AppColors.mutedForeground),
           style: _text,
           onChanged: (v) => setState(() => _search = v),
@@ -149,7 +145,7 @@ class _FaceRegistrationScreenState extends ConsumerState<FaceRegistrationScreen>
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Text(
-              term.isNotEmpty ? 'No employees match "$_search".' : 'No employees in the site data yet.',
+              term.isNotEmpty ? tr.noEmployeesMatch(_search) : tr.noEmployeesYet,
               style: _muted,
             ),
           )
@@ -181,7 +177,7 @@ class _FaceRegistrationScreenState extends ConsumerState<FaceRegistrationScreen>
                       SyncStatusBadge(status: face.status),
                       if (canRemove)
                         IconButton(
-                          tooltip: 'Remove face',
+                          tooltip: tr.removeFace,
                           constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
                           icon: const Icon(LucideIcons.trash2, size: 18, color: AppColors.mutedForeground),
                           onPressed: () => _removeFace(w),
@@ -266,11 +262,11 @@ class _PoseCaptureState extends ConsumerState<_PoseCapture> {
     } on CameraException catch (e) {
       if (mounted) {
         setState(() => _error = e.code.contains('AccessDenied')
-            ? 'Camera permission is needed to register faces. Allow it in the phone settings.'
-            : 'Camera could not start: ${e.description ?? e.code}');
+            ? tr.cameraPermissionRegister
+            : tr.cameraCouldNotStart(e.description ?? e.code));
       }
     } catch (e) {
-      if (mounted) setState(() => _error = 'Camera could not start: $e');
+      if (mounted) setState(() => _error = tr.cameraCouldNotStart('$e'));
     }
   }
 
@@ -286,11 +282,11 @@ class _PoseCaptureState extends ConsumerState<_PoseCapture> {
 
     if (quality == null) {
       if (_faceInFrame) setState(() => _faceInFrame = false);
-      return _setSubtitle('No face found');
+      return _setSubtitle(tr.noFaceFound);
     }
     if (!_faceInFrame) setState(() => _faceInFrame = true);
-    if (!quality.isGood) return _setSubtitle(quality.message);
-    if (!isStable) return _setSubtitle('Hold still...');
+    if (!quality.isGood) return _setSubtitle(tr.faceGuidance(quality.message));
+    if (!isStable) return _setSubtitle(tr.holdStill);
 
     _processingLock = true;
     unawaited(_captureCurrentPose(rawImage));
@@ -298,7 +294,7 @@ class _PoseCaptureState extends ConsumerState<_PoseCapture> {
 
   Future<void> _captureCurrentPose(CameraImage rawImage) async {
     final pose = registrationPoses[_poseIndex];
-    setState(() => _subtitle = 'Capturing "${pose.instruction}"...');
+    setState(() => _subtitle = tr.capturing(pose.label));
     try {
       final controller = _camera.controller;
       final camera = _camera.camera;
@@ -350,8 +346,7 @@ class _PoseCaptureState extends ConsumerState<_PoseCapture> {
         if (!mounted) return;
         final owner = ref.read(_employeesProvider).value?.where((w) => w.employeeCode == e.employeeCode).firstOrNull;
         final name = owner == null ? e.employeeCode : '${owner.fullName} (${owner.employeeCode})';
-        setState(() => _refused = 'This face is already registered to $name. A face can belong to only one '
-            'employee. If that registration is wrong, remove it first.');
+        setState(() => _refused = tr.faceAlreadyRegistered(name));
         return;
       }
       if (!mounted) return;
@@ -402,7 +397,7 @@ class _PoseCaptureState extends ConsumerState<_PoseCapture> {
 
   Color get _borderColor {
     if (_processingLock) return AppColors.accent;
-    if (_faceInFrame && _subtitle == 'Hold still...') return AppColors.pendingOnDark;
+    if (_faceInFrame && _subtitle == tr.holdStill) return AppColors.pendingOnDark;
     if (_faceInFrame) return Colors.yellowAccent;
     return Colors.white54;
   }
@@ -420,7 +415,7 @@ class _PoseCaptureState extends ConsumerState<_PoseCapture> {
           children: [
             const Icon(LucideIcons.circleX, size: 64, color: AppColors.destructive),
             const SizedBox(height: 16),
-            Text('Face not saved for $name.',
+            Text(tr.faceNotSaved(name),
                 textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
             Text(refused, textAlign: TextAlign.center, style: _text),
@@ -431,7 +426,7 @@ class _PoseCaptureState extends ConsumerState<_PoseCapture> {
               gradient: AppColors.headerGradient,
               shadows: AppColors.buttonShadows,
               onPressed: widget.onClose,
-              child: const Text('Back to the list', style: TextStyle(fontSize: 15)),
+              child: Text(tr.backToList, style: const TextStyle(fontSize: 15)),
             ),
           ],
         ),
@@ -447,7 +442,7 @@ class _PoseCaptureState extends ConsumerState<_PoseCapture> {
           children: [
             const Icon(LucideIcons.circleCheck, size: 64, color: AppColors.primary),
             const SizedBox(height: 16),
-            Text('Face registered for $name.', textAlign: TextAlign.center, style: const TextStyle(fontSize: 16)),
+            Text(tr.faceRegistered(name), textAlign: TextAlign.center, style: const TextStyle(fontSize: 16)),
             const SizedBox(height: 24),
             ShadButton(
               height: 48,
@@ -455,14 +450,14 @@ class _PoseCaptureState extends ConsumerState<_PoseCapture> {
               gradient: AppColors.headerGradient,
               shadows: AppColors.buttonShadows,
               onPressed: widget.onClose,
-              child: const Text('Register another', style: TextStyle(fontSize: 15)),
+              child: Text(tr.registerAnother, style: const TextStyle(fontSize: 15)),
             ),
             const SizedBox(height: 8),
             ShadButton.outline(
               height: 48,
               width: double.infinity,
               onPressed: () => context.go('/more'),
-              child: const Text('Done', style: TextStyle(fontSize: 15)),
+              child: Text(tr.done, style: const TextStyle(fontSize: 15)),
             ),
           ],
         ),
@@ -479,13 +474,13 @@ class _PoseCaptureState extends ConsumerState<_PoseCapture> {
           child: Row(
             children: [
               IconButton(
-                tooltip: 'Cancel',
+                tooltip: tr.cancel,
                 constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
                 icon: const Icon(LucideIcons.x, size: 20),
                 onPressed: widget.onClose,
               ),
               Expanded(child: Text(name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600))),
-              Text('${_poseIndex + 1} of ${registrationPoses.length}', style: _muted),
+              Text(tr.xOfY(_poseIndex + 1, registrationPoses.length), style: _muted),
             ],
           ),
         ),
@@ -496,7 +491,7 @@ class _PoseCaptureState extends ConsumerState<_PoseCapture> {
             children: [
               ShadProgress(value: (_poseIndex + 1) / registrationPoses.length),
               const SizedBox(height: 12),
-              Text(pose.instruction,
+              Text(pose.label,
                   textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
               const SizedBox(height: 12),
             ],
@@ -523,7 +518,7 @@ class _PoseCaptureState extends ConsumerState<_PoseCapture> {
           color: AppColors.foreground,
           padding: const EdgeInsets.all(16),
           child: Text(
-            _subtitle ?? 'Put the face in the oval',
+            _subtitle ?? tr.putFaceInOval,
             textAlign: TextAlign.center,
             style: const TextStyle(color: Colors.white, fontSize: 16),
           ),

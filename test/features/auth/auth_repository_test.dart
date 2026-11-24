@@ -91,7 +91,7 @@ void main() {
 
     test('TC-04 shows the server message for wrong details', () {
       when(() => api.login(any(), any()))
-          .thenThrow(const ApiException(LoginMessages.incorrect, status: 401));
+          .thenThrow(ApiException(LoginMessages.incorrect, status: 401));
       expect(repo().login('sup01', 'bad'), throwsA(isA<LoginException>().having((e) => e.message, 'message', LoginMessages.incorrect)));
     });
 
@@ -274,7 +274,7 @@ void main() {
 
     test('the server refuses (password changed, LG-03/LG-04): gives its message', () async {
       await loggedInOffline();
-      when(() => api.login(any(), any())).thenThrow(const ApiException(LoginMessages.incorrect, status: 401));
+      when(() => api.login(any(), any())).thenThrow(ApiException(LoginMessages.incorrect, status: 401));
 
       expect(repo().goOnline('sup01', 'pw'),
           throwsA(isA<LoginException>().having((e) => e.message, 'message', LoginMessages.incorrect)));
@@ -364,7 +364,7 @@ void main() {
     test('a wrong password leaves it off and drops the new key', () async {
       await repo().login('sup01', 'pw');
       when(() => api.registerFingerprint(any(), any(), any()))
-          .thenThrow(const ApiException(LoginMessages.incorrect, status: 401));
+          .thenThrow(ApiException(LoginMessages.incorrect, status: 401));
 
       await expectLater(repo().enableFingerprint('sup01', 'bad'),
           throwsA(isA<LoginException>().having((e) => e.message, 'message', LoginMessages.incorrect)));

@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import '../i18n/app_strings.dart';
 
 /// An error from agrum_be, or no connection. [message] is ready to show: the server's
 /// ApiErrorResponse already holds the FSD wording.
@@ -21,7 +22,7 @@ class ApiException implements Exception {
         case DioExceptionType.connectionTimeout:
         case DioExceptionType.receiveTimeout:
         case DioExceptionType.sendTimeout:
-          return const ApiException('Cannot reach the server.', isNetwork: true);
+          return ApiException(tr.cannotReachServer, isNetwork: true);
         default:
           break;
       }
@@ -39,10 +40,10 @@ class ApiException implements Exception {
   }
 
   static String _fallback(int? status) => switch (status) {
-        401 => 'Your session has expired. Please log in again.',
-        403 => 'You do not have permission to do this.',
-        429 => 'Too many requests. Please wait a moment and try again.',
-        _ => 'Something went wrong. Please try again.',
+        401 => tr.sessionExpired,
+        403 => tr.noPermissionGeneric,
+        429 => tr.tooManyRequests,
+        _ => tr.somethingWentWrong,
       };
 
   @override

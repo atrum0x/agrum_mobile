@@ -9,6 +9,8 @@ import '../../../core/connectivity.dart';
 import '../data/auth_repository.dart';
 import '../state/auth_controller.dart';
 import '../state/fingerprint_controller.dart';
+import '../../../core/i18n/app_strings.dart';
+import '../../../shared/widgets/language_picker.dart';
 
 /// FSD 2.1 Login. Online when the server can be reached, otherwise offline login (LG-07).
 class LoginScreen extends ConsumerStatefulWidget {
@@ -75,7 +77,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       setState(() => _formError = e.message);
     } catch (_) {
       if (!mounted) return;
-      setState(() => _formError = 'Something went wrong. Please try again.');
+      setState(() => _formError = tr.somethingWentWrong);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -97,7 +99,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       setState(() => _formError = e.message);
     } catch (_) {
       if (!mounted) return;
-      setState(() => _formError = 'Something went wrong. Please try again.');
+      setState(() => _formError = tr.somethingWentWrong);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -106,7 +108,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void _forgotPassword() {
     ShadToaster.of(
       context,
-    ).show(const ShadToast(title: Text('Forgot / Change Password'), description: Text(LoginMessages.forgotPassword)));
+    ).show(ShadToast(title: Text(tr.forgotChangePassword), description: Text(LoginMessages.forgotPassword)));
   }
 
   @override
@@ -138,10 +140,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _FieldLabel('Username'),
+                        _FieldLabel(tr.username),
                         ShadInput(
                           controller: _username,
-                          placeholder: const Text('Your username'),
+                          placeholder: Text(tr.yourUsername),
                           enabled: !_busy,
                           autocorrect: false,
                           enableSuggestions: false,
@@ -156,11 +158,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                         _FieldError(_usernameError),
                         const SizedBox(height: 16),
-                        _FieldLabel('Password'),
+                        _FieldLabel(tr.password),
                         ShadInput(
                           controller: _password,
                           focusNode: _passwordFocus,
-                          placeholder: const Text('Your password'),
+                          placeholder: Text(tr.yourPassword),
                           enabled: !_busy,
                           obscureText: !_showPassword,
                           textInputAction: TextInputAction.done,
@@ -191,7 +193,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                                 )
                               : null,
-                          child: Text(_busy ? 'Logging in…' : 'Login', style: const TextStyle(fontSize: 17)),
+                          child: Text(_busy ? tr.loggingIn : tr.login, style: const TextStyle(fontSize: 17)),
                         ),
                         if (fingerprint.canLogIn) ...[
                           const SizedBox(height: 12),
@@ -201,7 +203,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             enabled: !_busy,
                             onPressed: _fingerprintLogin,
                             leading: const Icon(LucideIcons.fingerprint, size: 22),
-                            child: const Text('Log in with fingerprint', style: TextStyle(fontSize: 17)),
+                            child: Text(tr.loginWithFingerprint, style: const TextStyle(fontSize: 17)),
                           ),
                         ],
                       ],
@@ -211,8 +213,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ShadButton.link(
                     height: 48,
                     onPressed: _forgotPassword,
-                    child: Text('Forgot / Change Password', style: TextStyle(color: theme.colorScheme.mutedForeground)),
+                    child: Text(tr.forgotChangePassword, style: TextStyle(color: theme.colorScheme.mutedForeground)),
                   ),
+                  const SizedBox(height: 8),
+                  Text(tr.language, style: theme.textTheme.small, textAlign: TextAlign.center),
+                  const SizedBox(height: 8),
+                  const LanguagePicker(),
                 ],
               ),
             ),
@@ -237,7 +243,7 @@ class _Brand extends StatelessWidget {
         const SizedBox(height: 16),
         Text('Agrum', style: theme.textTheme.h2),
         const SizedBox(height: 4),
-        Text('Field supervisor login', style: theme.textTheme.muted),
+        Text(tr.fieldSupervisorLogin, style: theme.textTheme.muted),
         if (!AppConfig.isProduction) ...[const SizedBox(height: 12), const _EnvironmentBadge()],
       ],
     );
@@ -259,7 +265,7 @@ class _EnvironmentBadge extends StatelessWidget {
           borderRadius: BorderRadius.circular(999),
         ),
         child: Text(
-          '${AppConfig.environment.toUpperCase()} – test system',
+          tr.environmentBadge(AppConfig.environment.toUpperCase()),
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.foreground),
         ),
       ),
@@ -279,16 +285,15 @@ class _OfflineNotice extends StatelessWidget {
         border: Border.all(color: AppColors.pending.withValues(alpha: 0.5)),
         borderRadius: BorderRadius.circular(10),
       ),
-      child: const Row(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(LucideIcons.wifiOff, color: AppColors.pending, size: 22),
-          SizedBox(width: 12),
+          const Icon(LucideIcons.wifiOff, color: AppColors.pending, size: 22),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'No connection. You can still log in if you logged in on this phone '
-              'in the last ${AppConfig.offlineLoginDays} days.',
-              style: TextStyle(fontSize: 16, color: AppColors.foreground),
+              tr.noConnectionLogin(AppConfig.offlineLoginDays),
+              style: const TextStyle(fontSize: 16, color: AppColors.foreground),
             ),
           ),
         ],

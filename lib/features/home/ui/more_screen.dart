@@ -10,6 +10,8 @@ import '../../auth/ui/fingerprint_ui.dart';
 import '../../face/state/face_providers.dart';
 import '../../setup/state/setup_controller.dart';
 import '../../sync/state/send_controller.dart';
+import '../../../core/i18n/app_strings.dart';
+import '../../../shared/widgets/language_picker.dart';
 
 final _dateTime = DateFormat('dd/MM/yyyy HH:mm');
 
@@ -57,21 +59,21 @@ class MoreScreen extends ConsumerWidget {
             ),
             if (auth.session.offline) ...[
               const SizedBox(height: 12),
-              const _Line(
+              _Line(
                 icon: LucideIcons.wifiOff,
                 color: AppColors.pending,
-                text: 'Logged in without internet. Log out and log in again online to send records.',
+                text: tr.loggedInOfflineNotice,
               ),
             ],
           ],
         ),
         _Section(
-          title: 'Sending',
+          title: tr.sending,
           children: [
             _Line(
               icon: send.waiting > 0 ? LucideIcons.cloudUpload : LucideIcons.cloudCheck,
               color: send.waiting > 0 ? AppColors.pending : AppColors.primary,
-              text: send.waiting > 0 ? '${send.waiting} records waiting to send' : 'Nothing waiting to send',
+              text: send.waiting > 0 ? tr.recordsWaiting(send.waiting) : tr.nothingWaiting,
             ),
             if (send.activity ?? send.result?.message case final message?) ...[
               const SizedBox(height: 8),
@@ -92,38 +94,36 @@ class MoreScreen extends ConsumerWidget {
               enabled: !send.sending,
               leading: const Icon(LucideIcons.send, size: 20),
               onPressed: () => ref.read(sendControllerProvider.notifier).sendNow(),
-              child: const Text('Send Now', style: TextStyle(fontSize: 16)),
+              child: Text(tr.sendNow, style: const TextStyle(fontSize: 16)),
             ),
           ],
         ),
         _Section(
-          title: 'Site data',
+          title: tr.siteData,
           children: [
             _Line(
               icon: LucideIcons.database,
               color: setup.info == null ? AppColors.pending : AppColors.primary,
               text: switch (setup) {
-                SetupState(refreshing: true) => 'Updating…',
-                SetupState(:final info?) => 'Downloaded ${_dateTime.format(info.refreshedAt.toLocal())}',
-                _ => 'Not downloaded yet. Connect to the internet and tap Send Now.',
+                SetupState(refreshing: true) => tr.updating,
+                SetupState(:final info?) => tr.downloadedAt(_dateTime.format(info.refreshedAt.toLocal())),
+                _ => tr.notDownloadedYet,
               },
             ),
             if (setup.error case final error?) ...[
               const SizedBox(height: 8),
-              Text('Last update failed: $error', style: const TextStyle(fontSize: 16, color: AppColors.destructive)),
+              Text(tr.lastUpdateFailed(error), style: const TextStyle(fontSize: 16, color: AppColors.destructive)),
             ],
           ],
         ),
         if (profile.canRegisterFaces)
           _Section(
-            title: 'Face Registration',
+            title: tr.faceRegistration,
             children: [
               _Line(
                 icon: LucideIcons.scanFace,
                 color: faces.isEmpty ? AppColors.pending : AppColors.primary,
-                text: faces.isEmpty
-                    ? 'No faces registered on this phone'
-                    : '${faces.length} ${faces.length == 1 ? 'face' : 'faces'} registered on this phone',
+                text: faces.isEmpty ? tr.noFacesOnPhone : tr.facesOnPhone(faces.length),
               ),
               const SizedBox(height: 12),
               ShadButton.outline(
@@ -131,19 +131,20 @@ class MoreScreen extends ConsumerWidget {
                 width: double.infinity,
                 leading: const Icon(LucideIcons.scanFace, size: 20),
                 onPressed: () => context.go('/more/faces'),
-                child: const Text('Register Face', style: TextStyle(fontSize: 16)),
+                child: Text(tr.registerFace, style: const TextStyle(fontSize: 16)),
               ),
             ],
           ),
         if (fingerprint.loaded && fingerprint.available)
-          _Section(title: 'Login', children: [FingerprintSetting(username: profile.username)]),
+          _Section(title: tr.loginSection, children: [FingerprintSetting(username: profile.username)]),
+        _Section(title: tr.language, children: const [LanguagePicker()]),
         const SizedBox(height: 8),
         ShadButton.outline(
           height: 52,
           width: double.infinity,
           leading: const Icon(LucideIcons.logOut, size: 20),
           onPressed: () => _confirmLogout(context, ref),
-          child: const Text('Logout', style: TextStyle(fontSize: 16)),
+          child: Text(tr.logout, style: const TextStyle(fontSize: 16)),
         ),
       ],
     );
@@ -153,15 +154,15 @@ class MoreScreen extends ConsumerWidget {
     final confirmed = await showShadDialog<bool>(
       context: context,
       builder: (context) => ShadDialog.alert(
-        title: const Text('Log out?'),
-        description: const Text('Records saved on this phone are kept and sent after you log in again.'),
+        title: Text(tr.logoutTitle),
+        description: Text(tr.logoutBody),
         actions: [
           ShadButton.outline(
             height: 48,
-            child: const Text('Cancel'),
+            child: Text(tr.cancel),
             onPressed: () => Navigator.of(context).pop(false),
           ),
-          ShadButton(height: 48, child: const Text('Logout'), onPressed: () => Navigator.of(context).pop(true)),
+          ShadButton(height: 48, child: Text(tr.logout), onPressed: () => Navigator.of(context).pop(true)),
         ],
       ),
     );

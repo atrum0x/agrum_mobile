@@ -6,6 +6,7 @@ import '../../../core/api/api_exception.dart';
 import '../../sync/data/sync_status.dart';
 import 'face_store.dart';
 import 'face_template_row.dart';
+import '../../../core/i18n/app_strings.dart';
 
 /// GET /api/face-templates and POST /api/face-templates/sync.
 class FaceSyncApi {
@@ -34,7 +35,7 @@ class FaceSyncApi {
       final error = ApiException.from(e);
       if (error.status == 404) return;
       if (error.status == 403) {
-        throw const ApiException('You do not have permission to remove faces.', status: 403);
+        throw ApiException(tr.noPermissionRemoveFaces, status: 403);
       }
       throw error;
     }
@@ -58,7 +59,7 @@ class FaceSyncApi {
       final error = ApiException.from(e);
       // A 403 may come with an empty body
       if (error.status == 403) {
-        throw const ApiException('You do not have permission to register faces.', status: 403);
+        throw ApiException(tr.noPermissionRegisterFaces, status: 403);
       }
       throw error;
     }

@@ -5,6 +5,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import '../../../app/theme.dart';
 import '../data/auth_repository.dart';
 import '../state/fingerprint_controller.dart';
+import '../../../core/i18n/app_strings.dart';
 
 /// Asks once after a password login: "Use your fingerprint to log in next time?"
 class FingerprintOfferListener extends ConsumerStatefulWidget {
@@ -36,21 +37,18 @@ class _FingerprintOfferListenerState extends ConsumerState<FingerprintOfferListe
       context: context,
       barrierDismissible: false,
       builder: (context) => ShadDialog.alert(
-        title: const Text('Log in with your fingerprint?'),
-        description: const Text(
-          'Next time, log in with your fingerprint instead of typing your password. '
-          'You can turn this off in More.',
-        ),
+        title: Text(tr.fingerprintOfferTitle),
+        description: Text(tr.fingerprintOfferBody),
         actions: [
           ShadButton.outline(
             height: 48,
-            child: const Text('Not now'),
+            child: Text(tr.notNow),
             onPressed: () => Navigator.of(context).pop(false),
           ),
           ShadButton(
             height: 48,
             leading: const Icon(LucideIcons.fingerprint, size: 20),
-            child: const Text('Turn on'),
+            child: Text(tr.turnOn),
             onPressed: () => Navigator.of(context).pop(true),
           ),
         ],
@@ -84,7 +82,7 @@ class FingerprintSetting extends ConsumerWidget {
       children: [
         Icon(LucideIcons.fingerprint, size: 22, color: on ? AppColors.primary : AppColors.mutedForeground),
         const SizedBox(width: 10),
-        const Expanded(child: Text('Log in with fingerprint', style: TextStyle(fontSize: 16))),
+        Expanded(child: Text(tr.loginWithFingerprint, style: const TextStyle(fontSize: 16))),
         ShadSwitch(
           value: on,
           onChanged: (value) => value ? _turnOn(context, ref) : _turnOff(context, ref),
@@ -102,7 +100,7 @@ class FingerprintSetting extends ConsumerWidget {
   Future<void> _turnOff(BuildContext context, WidgetRef ref) async {
     await ref.read(fingerprintControllerProvider.notifier).disable();
     if (!context.mounted) return;
-    ShadToaster.of(context).show(const ShadToast(title: Text('Fingerprint login turned off')));
+    ShadToaster.of(context).show(ShadToast(title: Text(tr.fingerprintTurnedOff)));
   }
 }
 
@@ -135,11 +133,11 @@ class _PasswordDialogState extends State<_PasswordDialog> {
   @override
   Widget build(BuildContext context) {
     return ShadDialog(
-      title: const Text('Turn on fingerprint login'),
-      description: const Text('Enter your password to confirm it is you.'),
+      title: Text(tr.turnOnFingerprintLogin),
+      description: Text(tr.confirmWithPassword),
       actions: [
-        ShadButton.outline(height: 48, child: const Text('Cancel'), onPressed: () => Navigator.of(context).pop()),
-        ShadButton(height: 48, onPressed: _submit, child: const Text('Continue')),
+        ShadButton.outline(height: 48, child: Text(tr.cancel), onPressed: () => Navigator.of(context).pop()),
+        ShadButton(height: 48, onPressed: _submit, child: Text(tr.continueLabel)),
       ],
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -151,7 +149,7 @@ class _PasswordDialogState extends State<_PasswordDialog> {
               controller: _password,
               autofocus: true,
               obscureText: true,
-              placeholder: const Text('Your password'),
+              placeholder: Text(tr.yourPassword),
               constraints: const BoxConstraints(minHeight: 52),
               leading: const Icon(LucideIcons.lock, size: 20),
               onSubmitted: (_) => _submit(),
@@ -173,18 +171,18 @@ Future<void> _run(BuildContext context, Future<void> Function() enable) async {
   final toaster = ShadToaster.of(context);
   try {
     await enable();
-    toaster.show(const ShadToast(
-      title: Text('Fingerprint login is on'),
-      description: Text('Next time, log in with your fingerprint.'),
+    toaster.show(ShadToast(
+      title: Text(tr.fingerprintIsOn),
+      description: Text(tr.fingerprintNextTime),
     ));
   } on FingerprintCanceled {
     // Closed the fingerprint prompt; it can be turned on later in More
   } on LoginException catch (e) {
-    toaster.show(ShadToast.destructive(title: const Text('Fingerprint login not turned on'), description: Text(e.message)));
+    toaster.show(ShadToast.destructive(title: Text(tr.fingerprintNotTurnedOn), description: Text(e.message)));
   } catch (_) {
-    toaster.show(const ShadToast.destructive(
-      title: Text('Fingerprint login not turned on'),
-      description: Text('Something went wrong. Please try again.'),
+    toaster.show(ShadToast.destructive(
+      title: Text(tr.fingerprintNotTurnedOn),
+      description: Text(tr.somethingWentWrong),
     ));
   }
 }

@@ -10,11 +10,12 @@ import '../../face/data/face_store.dart';
 import '../../face/data/face_sync_api.dart';
 import '../data/setup_api.dart';
 import '../data/setup_cache.dart';
+import '../../../core/i18n/app_strings.dart';
 
 class SetupMessages {
   const SetupMessages._();
 
-  static const offlineSession = 'You logged in without internet. Log out and log in again online to send.';
+  static String get offlineSession => tr.setupOfflineSession;
 }
 
 class SetupState {
